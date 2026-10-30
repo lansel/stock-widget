@@ -9,6 +9,7 @@ public class WidgetSettings
 {
     public List<string> Codes = new List<string>();
     public bool HideOnWinD = false;
+    public bool Autostart = true;
     public double Opacity = 0.92;
     public Color BgColor = Color.FromArgb(32, 32, 36);
     public Color NameColor = Color.WhiteSmoke;
@@ -42,6 +43,11 @@ public static class StockList
                 if (key.Equals("hideOnWinD", StringComparison.OrdinalIgnoreCase))
                 {
                     s.HideOnWinD = val.Equals("true", StringComparison.OrdinalIgnoreCase);
+                    continue;
+                }
+                if (key.Equals("autostart", StringComparison.OrdinalIgnoreCase))
+                {
+                    s.Autostart = !val.Equals("false", StringComparison.OrdinalIgnoreCase);
                     continue;
                 }
                 if (key.Equals("opacity", StringComparison.OrdinalIgnoreCase))
@@ -157,13 +163,32 @@ public static class StockList
             "stocks.txt");
     }
 
-    public static string ResolveConfigPath(string[] args)
+    // 启动早期读取配置（如判断 autostart 开关）；文件缺失或读取失败时返回默认值
+    public static WidgetSettings LoadSettingsOrDefault(string path)
+    {
+        try
+        {
+            if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                return ParseWidgetSettings(File.ReadAllText(path)) ?? new WidgetSettings();
+        }
+        catch { }
+        return new WidgetSettings();
+    }
+
+    private static string GetConfigArg(string[] args)
     {
         for (int i = 0; i < args.Length - 1; i++)
         {
             if (args[i] == "--config" && !string.IsNullOrEmpty(args[i + 1]))
                 return args[i + 1];
         }
+        return null;
+    }
+
+    public static string ResolveConfigPath(string[] args)
+    {
+        string viaArg = GetConfigArg(args);
+        if (!string.IsNullOrEmpty(viaArg)) return viaArg;
         try
         {
             string exeDir = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);

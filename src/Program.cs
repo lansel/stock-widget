@@ -20,8 +20,10 @@ static class Program
             {
                 return 0;
             }
-            Autostart.Ensure();
             string configPath = StockList.ResolveConfigPath(args);
+            WidgetSettings boot = StockList.LoadSettingsOrDefault(configPath);
+            if (boot.Autostart) Autostart.Ensure(args);
+            else Autostart.Remove();
             Application.EnableVisualStyles();
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
             Application.ThreadException += OnThreadException;

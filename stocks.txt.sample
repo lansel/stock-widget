@@ -11,6 +11,9 @@
 # hideOnWinD=true 时按 Win+D 隐藏挂件，打开任意软件自动恢复（默认 false）
 hideOnWinD=false
 
+# 开机自启（默认 true）；false = 不写自启项并移除已有的（热生效）
+autostart=true
+
 # 透明度 0.1~1.0（默认 0.92）
 opacity=0.92
 

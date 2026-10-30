@@ -1,10 +1,11 @@
 # 股票挂件（StockWidget）
 
-Windows 桌面常驻小挂件，实时显示 A 股/指数涨跌幅。零安装，单个 exe（约 24KB），双击即用。
+Windows 桌面常驻小挂件，实时显示 A 股/指数涨跌幅。零安装，单个 exe，双击即用。
 
 ## 下载
 
-从 [Releases](https://gitee.com/Ricky_kyli/stock-widget/releases) 下载最新版 `StockWidget.exe` 和 `stocks.txt.sample`。
+- Gitee：[Releases](https://gitee.com/Ricky_kyli/stock-widget/releases) 下载最新版 `StockWidget.exe` 和 `stocks.txt.sample`
+- GitHub：[Releases](https://github.com/lansel/stock-widget/releases)（由 CI 自动构建并挂载）
 
 ## 功能
 
@@ -56,6 +57,7 @@ nameColor=#F5F5F5
 |--------|--------|------|
 | 股票代码 | — | 一行一个 6 位数字；支持沪/深/北交所、指数和 ETF/LOF 基金 |
 | `hideOnWinD` | `false` | `true` = Win+D 时隐藏挂件，打开任意软件自动恢复 |
+| `autostart` | `true` | `false` = 不写开机自启，并移除已有的自启项（热生效） |
 | `opacity` | `0.92` | 透明度，0.1（几乎透明）~ 1.0（完全不透明） |
 | `bgColor` | `#202024` | 背景色，十六进制 RGB |
 | `nameColor` | `#F5F5F5` | 股票名称文字颜色 |
@@ -100,7 +102,7 @@ StockWidget.exe --fetch 600519 000001
 powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
-产物在 `bin\StockWidget.exe`，构建过程会自动运行 40 项自测。
+产物在 `bin\StockWidget.exe`，构建过程会自动运行 42 项自测。
 
 ## 卸载
 

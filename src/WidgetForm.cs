@@ -77,6 +77,7 @@ public sealed class WidgetForm : Form
     private bool _winKeyDown;
     private bool _winDToggle;
     private bool _hideOnWinD;
+    private bool _lastAutostart = true;
     private bool _lastDesktopShown;
     private IntPtr _lastAppFg = IntPtr.Zero;
 
@@ -194,6 +195,16 @@ public sealed class WidgetForm : Form
 
         if (!initial && oldHide != _hideOnWinD)
             ApplyHideModeChange(_hideOnWinD);
+
+        if (settings.Autostart != _lastAutostart)
+        {
+            _lastAutostart = settings.Autostart;
+            if (!initial)
+            {
+                if (settings.Autostart) Autostart.Ensure();
+                else Autostart.Remove();
+            }
+        }
 
         _rows.SetStale(_stale && _codes.Count > 0);
     }

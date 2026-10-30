@@ -74,6 +74,21 @@ static class SelfTest
             var s = StockList.ParseWidgetSettings("# stocks\n600519\n\nhideOnWinD=true\n000001\n");
             Assert(s.Codes.Count == 2 && s.Codes[0] == "600519" && s.Codes[1] == "000001" && s.HideOnWinD);
         });
+        fail += Run("StockList.ParseWidgetSettings autostart", () => {
+            Assert(StockList.ParseWidgetSettings("600519\n").Autostart);
+            Assert(!StockList.ParseWidgetSettings("autostart=false\n").Autostart);
+            Assert(StockList.ParseWidgetSettings("autostart=true\nautostart=yes\n").Autostart);
+        });
+        fail += Run("StockList.LoadSettingsOrDefault", () => {
+            var d = StockList.LoadSettingsOrDefault(@"E:\no_such_dir\stocks.txt");
+            Assert(d.Autostart && d.Codes.Count == 0);
+            string p = NewConfigPath();
+            try {
+                WriteConfig(p, "autostart=false\n000300\n");
+                var s = StockList.LoadSettingsOrDefault(p);
+                Assert(!s.Autostart && s.Codes.Count == 1 && s.Codes[0] == "000300");
+            } finally { if (File.Exists(p)) File.Delete(p); }
+        });
         fail += Run("StockList.ResolveConfigPath with --config", () => {
             var args = new[] { "--config", @"E:\test\stocks.txt" };
             Assert(StockList.ResolveConfigPath(args) == @"E:\test\stocks.txt");
