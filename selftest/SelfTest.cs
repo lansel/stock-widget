@@ -32,8 +32,37 @@ static class SelfTest
         fail += Run("StockList.GetConfigPath on desktop", () => {
             Assert(StockList.GetConfigPath().EndsWith("stocks.txt"));
         });
+        fail += Run("QuoteParser.Parse multi entry", () => {
+            string text = TEntry("sh600519", "600519", "\u8d35\u5dde\u8305\u53f0", "1369.04", "1.11")
+                + ";\n" + TEntry("sz000001", "000001", "\u5e73\u5b89\u94f6\u884c", "11.47", "-0.61")
+                + ";\nv_pv_none_match=\"1\";";
+            var r = QuoteParser.Parse(text);
+            Assert(r.Count == 2);
+            Assert(r["600519"].Name == "\u8d35\u5dde\u8305\u53f0");
+            Assert(r["600519"].Price == 1369.04 && r["600519"].Pct == 1.11);
+            Assert(r["000001"].Pct == -0.61);
+        });
+        fail += Run("QuoteParser.Parse garbage and truncated", () => {
+            Assert(QuoteParser.Parse("").Count == 0);
+            Assert(QuoteParser.Parse("<html>error</html>").Count == 0);
+            Assert(QuoteParser.Parse("v_sh600519=\"1~only~two\";").Count == 0);
+        });
+        fail += Run("QuoteParser.FormatPct", () => {
+            Assert(QuoteParser.FormatPct(1.11) == "+1.11%");
+            Assert(QuoteParser.FormatPct(-0.61) == "-0.61%");
+            Assert(QuoteParser.FormatPct(0) == "0.00%");
+            Assert(QuoteParser.FormatPct(2.5) == "+2.50%");
+        });
         Console.WriteLine(fail == 0 ? "ALL PASS" : fail + " FAILED");
         return fail == 0 ? 0 : 1;
+    }
+
+    static string TEntry(string sym, string code, string name, string price, string pct)
+    {
+        var f = new string[33];
+        for (int i = 0; i < 33; i++) f[i] = "0";
+        f[1] = name; f[2] = code; f[3] = price; f[31] = pct; f[32] = pct;
+        return "v_" + sym + "=\"" + string.Join("~", f) + "\"";
     }
 
     static int Run(string name, Action test)
