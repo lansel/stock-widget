@@ -1,13 +1,19 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Windows.Forms;
 
 static class Program
 {
+    [STAThread]
     static int Main(string[] args)
     {
         if (args.Length >= 1 && args[0] == "--fetch")
             return RunFetch(args);
+
+        bool noLayer = Array.IndexOf(args, "--no-desktop-layer") >= 0;
+        Application.EnableVisualStyles();
+        Application.Run(new WidgetForm(!noLayer));
         return 0;
     }
 
