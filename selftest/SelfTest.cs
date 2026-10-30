@@ -288,6 +288,28 @@ static class SelfTest
             Assert(TradingClock.GetStatus(mon.AddHours(15)) == MarketStatus.Closed);
             Assert(TradingClock.GetStatus(mon.AddHours(16)) == MarketStatus.Closed);
         });
+        fail += Run("TradingClock holidays 2026", () => {
+            Assert(TradingClock.GetStatus(new DateTime(2026, 1, 1, 10, 0, 0)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(new DateTime(2026, 1, 2, 10, 0, 0)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(new DateTime(2026, 2, 18, 10, 0, 0)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(new DateTime(2026, 2, 23, 10, 0, 0)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(new DateTime(2026, 4, 6, 10, 0, 0)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(new DateTime(2026, 5, 1, 10, 0, 0)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(new DateTime(2026, 6, 19, 10, 0, 0)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(new DateTime(2026, 9, 25, 10, 0, 0)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(new DateTime(2026, 10, 1, 10, 0, 0)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(new DateTime(2026, 10, 7, 10, 0, 0)) == MarketStatus.Closed);
+        });
+        fail += Run("TradingClock holiday edges", () => {
+            Assert(TradingClock.GetStatus(new DateTime(2026, 1, 5, 10, 0, 0)) == MarketStatus.Open);
+            Assert(TradingClock.GetStatus(new DateTime(2026, 2, 24, 10, 0, 0)) == MarketStatus.Open);
+            Assert(TradingClock.GetStatus(new DateTime(2026, 9, 30, 10, 0, 0)) == MarketStatus.Open);
+            Assert(TradingClock.GetStatus(new DateTime(2026, 2, 14, 10, 0, 0)) == MarketStatus.Weekend);
+            Assert(TradingClock.GetStatus(new DateTime(2026, 2, 28, 10, 0, 0)) == MarketStatus.Weekend);
+        });
+        fail += Run("TradingClock 2027 degrades gracefully", () => {
+            Assert(TradingClock.GetStatus(new DateTime(2027, 1, 1, 10, 0, 0)) == MarketStatus.Open);
+        });
         fail += Run("TradingClock interval and label", () => {
             Assert(TradingClock.GetIntervalMs(MarketStatus.Open) == 3000);
             Assert(TradingClock.GetIntervalMs(MarketStatus.Lunch) == 60000);

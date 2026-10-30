@@ -107,7 +107,7 @@ StockWidget.exe --fetch 600519 000001
 powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
-产物在 `bin\StockWidget.exe`，构建过程会自动运行 45 项自测。
+产物在 `bin\StockWidget.exe`，构建过程会自动运行 48 项自测。
 
 ## 卸载
 
@@ -119,7 +119,7 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 ## 已知取舍
 
 - 免费行情接口有秒级延迟
-- 无节假日日历：法定假日落在工作日时显示“盘中”但数据静止
+- 节假日：内置 2026 年 A 股休市表（来源：[上交所公告](https://www.sse.com.cn/disclosure/announcement/general/c/c_20251222_10802507.shtml)）；2027 年安排公布后随新版本更新，过期时退回旧行为（假日仍显示”盘中”）
 - 内存占用约 30–50MB
 - 系统 DPI 感知；把挂件拖到不同 DPI 的显示器时由系统拉伸，完整 Per-Monitor V2 未实现
 - 配置清空提示有约 500ms 防抖，避免编辑器保存瞬间闪空
