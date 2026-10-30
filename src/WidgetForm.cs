@@ -131,6 +131,7 @@ public sealed class WidgetForm : Form
         ApplySavedPosition();
         UpdateKeyboardHook();
         StartQuoteTimer(TradingClock.GetIntervalMs(TradingClock.GetStatus(DateTime.Now)));
+        _rows.SetMarketClosed(TradingClock.IsNonTradingDay(DateTime.Now));
         Shown += OnFormShown;
         ApplyRoundedRegion();
     }
@@ -372,6 +373,8 @@ public sealed class WidgetForm : Form
         if (_quoteTimer.Interval != want)
             _quoteTimer.Interval = want;
 
+        // 跨过开盘/休市边界时自动切换显示模式
+        _rows.SetMarketClosed(TradingClock.IsNonTradingDay(DateTime.Now));
         FetchOnce();
     }
 

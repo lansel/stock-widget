@@ -21,11 +21,13 @@ public sealed class RowView : IDisposable
     private readonly List<Label> _priceLabels = new List<Label>();
     private readonly List<Label> _pctLabels = new List<Label>();
     private Label _hint;
+    private Label _closedHint;
     private Label _statusDot;
     private List<string> _codes = new List<string>();
     private List<string> _aliases = new List<string>();
     private Color _nameColor = Color.WhiteSmoke;
     private bool _showPrice;
+    private bool _marketClosed;
     private bool _fileExists;
     private bool _stale;
     private bool _built;
@@ -93,6 +95,7 @@ public sealed class RowView : IDisposable
         }
         _built = true;
         UpdateStatusDot();
+        ApplyClosedVisibility();
         Layout();
         return true;
     }
@@ -153,9 +156,50 @@ public sealed class RowView : IDisposable
         UpdateStatusDot();
     }
 
+    // 非开盘日（周末/法定假日）：隐藏行情行，显示“今日休市”单行提示
+    public void SetMarketClosed(bool closed)
+    {
+        if (_marketClosed == closed) return;
+        _marketClosed = closed;
+        ApplyClosedVisibility();
+        Layout();
+    }
+
+    private void ApplyClosedVisibility()
+    {
+        bool showRows = !_marketClosed || _codes.Count == 0;
+        for (int i = 0; i < _nameLabels.Count; i++) _nameLabels[i].Visible = showRows;
+        for (int i = 0; i < _priceLabels.Count; i++) _priceLabels[i].Visible = showRows;
+        for (int i = 0; i < _pctLabels.Count; i++) _pctLabels[i].Visible = showRows;
+        if (showRows)
+        {
+            if (_closedHint != null) _closedHint.Visible = false;
+        }
+        else
+        {
+            EnsureClosedHint();
+            _closedHint.Visible = true;
+        }
+    }
+
+    private void EnsureClosedHint()
+    {
+        if (_closedHint != null) return;
+        _closedHint = new Label();
+        _closedHint.Font = _hintFont;
+        _closedHint.ForeColor = Color.Gray;
+        _closedHint.AutoSize = false;
+        _closedHint.AutoEllipsis = true;
+        _closedHint.UseMnemonic = false;
+        _closedHint.TextAlign = ContentAlignment.MiddleLeft;
+        _closedHint.Text = "今日休市";
+        _configure(_closedHint);
+        _parent.Controls.Add(_closedHint);
+    }
+
     private void UpdateStatusDot()
     {
-        _statusDot.Visible = _stale && _codes.Count > 0;
+        _statusDot.Visible = _stale && _codes.Count > 0 && !_marketClosed;
         if (_statusDot.Visible) _statusDot.BringToFront();
     }
 
@@ -229,15 +273,22 @@ public sealed class RowView : IDisposable
     {
         int priceW = _showPrice ? _metrics.PriceColumnWidth : 0;
         int width = _metrics.Width + priceW;
-        int y = _metrics.MarginY;
-        if (_hint != null)
+        int h;
+        if (_marketClosed && _codes.Count > 0)
+        {
+            _closedHint.Size = new Size(width - _metrics.MarginX * 2, _metrics.RowHeight);
+            _closedHint.Location = new Point(_metrics.MarginX, _metrics.MarginY);
+            h = _metrics.MarginY * 2 + _metrics.RowHeight;
+        }
+        else if (_hint != null)
         {
             _hint.Size = new Size(width - _metrics.MarginX * 2, _metrics.RowHeight);
-            _hint.Location = new Point(_metrics.MarginX, y);
-            y += _metrics.RowHeight;
+            _hint.Location = new Point(_metrics.MarginX, _metrics.MarginY);
+            h = _metrics.MarginY + _metrics.RowHeight + _metrics.MarginY;
         }
         else
         {
+            int y = _metrics.MarginY;
             for (int i = 0; i < _nameLabels.Count; i++)
             {
                 _nameLabels[i].Location = new Point(_metrics.MarginX, y);
@@ -248,9 +299,8 @@ public sealed class RowView : IDisposable
                     _metrics.MarginX + _metrics.NameColumnWidth + priceW, y);
                 y += _metrics.RowHeight;
             }
+            h = y + _metrics.MarginY;
         }
-
-        int h = y + _metrics.MarginY;
         if (h < _metrics.MinHeight) h = _metrics.MinHeight;
         _parent.Size = new Size(width, h);
 
@@ -297,6 +347,11 @@ public sealed class RowView : IDisposable
     public void Dispose()
     {
         ClearRows();
+        if (_closedHint != null)
+        {
+            RemoveAndDispose(_closedHint);
+            _closedHint = null;
+        }
         if (_statusDot != null)
         {
             RemoveAndDispose(_statusDot);

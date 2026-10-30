@@ -31,6 +31,15 @@ public static class TradingClock
         return MarketStatus.Closed;
     }
 
+    // 周末或法定假日（工作日）——当天完全不交易的“非开盘日”
+    // 注意：调休上班的周六周日 A 股仍休市，也归入非开盘日
+    public static bool IsNonTradingDay(DateTime now)
+    {
+        DayOfWeek day = now.DayOfWeek;
+        if (day == DayOfWeek.Saturday || day == DayOfWeek.Sunday) return true;
+        return HolidayCalendar.IsClosed(now);
+    }
+
     public static int GetIntervalMs(MarketStatus status)
     {
         return status == MarketStatus.Open ? 3000 : 60000;
