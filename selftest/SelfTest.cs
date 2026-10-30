@@ -33,6 +33,26 @@ static class SelfTest
         fail += Run("StockList.GetConfigPath on desktop", () => {
             Assert(StockList.GetConfigPath().EndsWith("stocks.txt"));
         });
+        fail += Run("StockList.ParseWidgetSettings codes only", () => {
+            var s = StockList.ParseWidgetSettings("# comment\n600519\n000001\n");
+            Assert(s.Codes.Count == 2 && s.Codes[0] == "600519" && !s.HideOnWinD);
+        });
+        fail += Run("StockList.ParseWidgetSettings hideOnWinD true", () => {
+            var s = StockList.ParseWidgetSettings("600519\nhideOnWinD=true\n");
+            Assert(s.Codes.Count == 1 && s.HideOnWinD);
+        });
+        fail += Run("StockList.ParseWidgetSettings hideOnWinD false", () => {
+            var s = StockList.ParseWidgetSettings("hideOnWinD=false\n600519\n");
+            Assert(s.Codes.Count == 1 && !s.HideOnWinD);
+        });
+        fail += Run("StockList.ParseWidgetSettings mixed", () => {
+            var s = StockList.ParseWidgetSettings("# stocks\n600519\n\nhideOnWinD=true\n000001\n");
+            Assert(s.Codes.Count == 2 && s.Codes[0] == "600519" && s.Codes[1] == "000001" && s.HideOnWinD);
+        });
+        fail += Run("StockList.ResolveConfigPath with --config", () => {
+            var args = new[] { "--config", @"E:\test\stocks.txt" };
+            Assert(StockList.ResolveConfigPath(args) == @"E:\test\stocks.txt");
+        });
         fail += Run("QuoteParser.Parse multi entry", () => {
             string text = TEntry("sh600519", "600519", "\u8d35\u5dde\u8305\u53f0", "1369.04", "1.11")
                 + ";\n" + TEntry("sz000001", "000001", "\u5e73\u5b89\u94f6\u884c", "11.47", "-0.61")

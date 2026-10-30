@@ -13,6 +13,6 @@ if ($LASTEXITCODE -ne 0) { exit 1 }
 if ($LASTEXITCODE -ne 0) { Write-Host "SELFTEST FAILED"; exit 1 }
 
 $mainSrc = @(Get-ChildItem src\*.cs | ForEach-Object { $_.FullName })
-& $csc -nologo -codepage:65001 -out:bin\StockWidget.exe -r:System.Windows.Forms.dll -r:System.Drawing.dll -r:System.Net.Http.dll -r:System.Core.dll $mainSrc
+& $csc -nologo -target:winexe -codepage:65001 -out:bin\StockWidget.exe -r:System.Windows.Forms.dll -r:System.Drawing.dll -r:System.Net.Http.dll -r:System.Core.dll $mainSrc
 if ($LASTEXITCODE -ne 0) { exit 1 }
 Write-Host "BUILD OK"

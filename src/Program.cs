@@ -11,9 +11,9 @@ static class Program
         if (args.Length >= 1 && args[0] == "--fetch")
             return RunFetch(args);
 
-        bool noLayer = Array.IndexOf(args, "--no-desktop-layer") >= 0;
+        string configPath = StockList.ResolveConfigPath(args);
         Application.EnableVisualStyles();
-        Application.Run(new WidgetForm(!noLayer));
+        Application.Run(new WidgetForm(configPath));
         return 0;
     }
 

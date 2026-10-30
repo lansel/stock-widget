@@ -570,3 +570,94 @@ Run: `reg query "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v StockWid
 git -C E:\stock-widget add -A
 git -C E:\stock-widget commit -m "feat: single instance, autostart, readme and final verification"
 ```
+
+---
+
+### Task 10: 合并配置文件 + hideOnWinD 模式（增补）
+
+**Files:**
+- Modify: `src/StockList.cs`（`ParseFileContent` 扩展支持设置行；新增 `WidgetSettings` 类）
+- Modify: `src/WidgetForm.cs`（低级键盘钩子检测 Win+D；`hideOnWinD=true` 时隐藏/恢复）
+- Modify: `src/Program.cs`（`--config <path>` 参数；启动时解析配置路径）
+- Modify: `selftest/SelfTest.cs`
+
+**Interfaces:**
+- Consumes: `StockList.ToSymbol`、`QuoteClient`、`QuoteParser`、`TradingClock`
+- Produces:
+  - `class WidgetSettings { List<string> Codes; bool HideOnWinD; }`
+  - `StockList.ParseWidgetSettings(string content) -> WidgetSettings`（兼容旧 `ParseFileContent` 的全部行为，额外识别 `hideOnWinD=true|false`）
+  - `StockList.ResolveConfigPath(string[] args) -> string`（`--config` → exe 目录 → 桌面，按序查找）
+  - `WidgetForm` 构造改为接收 `WidgetSettings`（或配置路径）；内部每周期重读配置
+
+- [ ] **Step 1: 扩展 `StockList.cs`**
+
+```csharp
+public class WidgetSettings
+{
+    public List<string> Codes = new List<string>();
+    public bool HideOnWinD = false;
+}
+
+public static WidgetSettings ParseWidgetSettings(string content)
+{
+    var s = new WidgetSettings();
+    if (content == null) return s;
+    content = content.TrimStart('\uFEFF');
+    var seen = new HashSet<string>();
+    foreach (string raw in content.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+    {
+        string line = raw.Trim();
+        if (line.Length == 0 || line.StartsWith("#")) continue;
+        if (line.StartsWith("hideOnWinD", StringComparison.OrdinalIgnoreCase))
+        {
+            int eq = line.IndexOf('=');
+            if (eq > 0)
+                s.HideOnWinD = line.Substring(eq + 1).Trim()
+                    .Equals("true", StringComparison.OrdinalIgnoreCase);
+            continue;
+        }
+        if (Regex.IsMatch(line, @"^\d{6}$") && seen.Add(line))
+            s.Codes.Add(line);
+    }
+    return s;
+}
+
+public static string ResolveConfigPath(string[] args)
+{
+    for (int i = 0; i < args.Length - 1; i++)
+        if (args[i] == "--config") return args[i + 1];
+    string exeDir = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
+    string local = Path.Combine(exeDir, "stocks.txt");
+    if (File.Exists(local)) return local;
+    return GetConfigPath(); // 桌面
+}
+```
+
+- [ ] **Step 2: `WidgetForm.cs` 加 Win+D 检测与隐藏逻辑**
+
+- `WidgetForm` 增加 `bool _hideOnWinD` 字段（从配置读取，每周期可变）
+- 低级键盘钩子 `SetWindowsHookEx(WH_KEYBOARD_LL, ...)`：记录 Win 键按下状态；Win 键按下期间收到 `D`（0x44）→ 置 `_winDTogglePending = true`
+- 渲染循环末尾：若 `_hideOnWinD && _winDTogglePending` → `Hide()`、清标志；若已隐藏且前台窗口非桌面类（非 Progman/WorkerW/Shell_TrayWnd）→ `Show()`、`SetWindowPos HWND_TOPMOST → HWND_NOTOPMOST` 恢复
+- 模式 1（`hideOnWinD=false`）保持现有"桌面前台时拉回最前"逻辑
+
+- [ ] **Step 3: `Program.cs` 接入 `--config`**
+
+`Main` 中解析 `--config` 后把路径传入 `WidgetForm`；`--fetch` 分支同样支持 `--config` 指定的股票列表（可选，非必须）。
+
+- [ ] **Step 4: 构建 + 单测 + 手动验证**
+
+Run: `powershell -ExecutionPolicy Bypass -File E:\stock-widget\build.ps1` → Expected: 全部 `PASS`、`BUILD OK`
+
+手动核对：
+- [ ] 配置文件含 `hideOnWinD=true` → Win+D 挂件消失；打开任意软件 → 挂件回来
+- [ ] 配置文件含 `hideOnWinD=false` 或无此行 → Win+D 挂件显示在最前（现有行为）
+- [ ] `--config E:\some\path\stocks.txt` 能读到该文件的代码和设置
+- [ ] exe 同目录放 `stocks.txt` → 优先于桌面读取
+- [ ] 改配置文件中 `hideOnWinD` 的值，无需重启即可生效
+
+- [ ] **Step 5: Commit**
+
+```bash
+git -C E:\stock-widget add -A
+git -C E:\stock-widget commit -m "feat: merged config file with hideOnWinD mode"
+```
