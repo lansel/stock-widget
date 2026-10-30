@@ -393,8 +393,9 @@ public sealed class WidgetForm : Form
         for (int i = 0; i < _codes.Count && i < _rowNameLabels.Count; i++)
         {
             string code = _codes[i];
+            string symbol = StockList.ToSymbol(code);
             Quote q;
-            if (_quotes.TryGetValue(code, out q))
+            if (_quotes.TryGetValue(symbol, out q))
             {
                 _rowNameLabels[i].Text = q.Name;
                 _rowPctLabels[i].Text = QuoteParser.FormatPct(q.Pct);

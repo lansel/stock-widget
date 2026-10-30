@@ -44,8 +44,9 @@ static class Program
             var quotes = QuoteParser.Parse(raw);
             foreach (string code in codes)
             {
+                string symbol = StockList.ToSymbol(code);
                 Quote q;
-                if (quotes.TryGetValue(code, out q))
+                if (quotes.TryGetValue(symbol, out q))
                     Console.WriteLine(string.Format("{0} {1} {2} {3}",
                         code, q.Name, q.Price.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture),
                         QuoteParser.FormatPct(q.Pct)));

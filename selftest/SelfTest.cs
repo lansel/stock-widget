@@ -32,6 +32,11 @@ static class SelfTest
             Assert(StockList.ToSymbol("920002") == "bj920002");
             Assert(StockList.ToSymbol("900901") == "sh900901");
         });
+        fail += Run("StockList.ToSymbol index and prefixed", () => {
+            Assert(StockList.ToSymbol("1A0001") == "sh000001");
+            Assert(StockList.ToSymbol("sh000001") == "sh000001");
+            Assert(StockList.ToSymbol("SZ399001") == "sz399001");
+        });
         fail += Run("StockList.GetConfigPath on desktop", () => {
             Assert(StockList.GetConfigPath().EndsWith("stocks.txt"));
         });
@@ -76,9 +81,9 @@ static class SelfTest
                 + ";\nv_pv_none_match=\"1\";";
             var r = QuoteParser.Parse(text);
             Assert(r.Count == 2);
-            Assert(r["600519"].Name == "\u8d35\u5dde\u8305\u53f0");
-            Assert(r["600519"].Price == 1369.04 && r["600519"].Pct == 1.11);
-            Assert(r["000001"].Pct == -0.61);
+            Assert(r["sh600519"].Name == "\u8d35\u5dde\u8305\u53f0");
+            Assert(r["sh600519"].Price == 1369.04 && r["sh600519"].Pct == 1.11);
+            Assert(r["sz000001"].Pct == -0.61);
         });
         fail += Run("QuoteParser.Parse garbage and truncated", () => {
             Assert(QuoteParser.Parse("").Count == 0);

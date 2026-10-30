@@ -15,7 +15,7 @@ public sealed class Quote
 public static class QuoteParser
 {
     private static readonly Regex EntryRegex =
-        new Regex("v_(?:sh|sz|bj)(\\d+)=\"([^\"]*)\"", RegexOptions.Compiled);
+        new Regex("v_((?:sh|sz|bj)\\d+)=\"([^\"]*)\"", RegexOptions.Compiled);
 
     public static Dictionary<string, Quote> Parse(string responseText)
     {

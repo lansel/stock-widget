@@ -77,7 +77,10 @@ public static class StockList
                 }
             }
 
-            if (Regex.IsMatch(line, @"^\d{6}$") && seen.Add(line))
+            if ((Regex.IsMatch(line, @"^\d{6}$") ||
+                 Regex.IsMatch(line, @"^(sh|sz|bj)\d{6}$", RegexOptions.IgnoreCase) ||
+                 Regex.IsMatch(line, @"^1A\d{4}$", RegexOptions.IgnoreCase))
+                && seen.Add(line))
                 s.Codes.Add(line);
         }
         return s;
@@ -101,6 +104,13 @@ public static class StockList
 
     public static string ToSymbol(string code)
     {
+        code = code.Trim();
+        // 已带 sh/sz/bj 前缀的直接返回（小写）
+        if (Regex.IsMatch(code, @"^(sh|sz|bj)\d{6}$", RegexOptions.IgnoreCase))
+            return code.ToLower();
+        // 指数代码：1A0001 → sh000001（上证指数）
+        if (Regex.IsMatch(code, @"^1A\d{4}$", RegexOptions.IgnoreCase))
+            return "sh00" + code.Substring(2);
         if (code.StartsWith("92")) return "bj" + code;
         char c = code[0];
         if (c == '6' || c == '9') return "sh" + code;
