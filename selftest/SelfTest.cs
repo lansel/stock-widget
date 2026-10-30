@@ -310,6 +310,15 @@ static class SelfTest
         fail += Run("TradingClock 2027 degrades gracefully", () => {
             Assert(TradingClock.GetStatus(new DateTime(2027, 1, 1, 10, 0, 0)) == MarketStatus.Open);
         });
+        fail += Run("TradingClock.IsNonTradingDay", () => {
+            Assert(TradingClock.IsNonTradingDay(new DateTime(2026, 10, 31, 9, 0, 0)));
+            Assert(TradingClock.IsNonTradingDay(new DateTime(2026, 11, 1, 10, 0, 0)));
+            Assert(TradingClock.IsNonTradingDay(new DateTime(2026, 10, 1, 10, 0, 0)));
+            Assert(TradingClock.IsNonTradingDay(new DateTime(2026, 2, 14, 10, 0, 0)));
+            Assert(!TradingClock.IsNonTradingDay(new DateTime(2026, 9, 30, 10, 0, 0)));
+            Assert(!TradingClock.IsNonTradingDay(new DateTime(2026, 12, 31, 14, 0, 0)));
+            Assert(!TradingClock.IsNonTradingDay(new DateTime(2027, 1, 1, 10, 0, 0)));
+        });
         fail += Run("TradingClock interval and label", () => {
             Assert(TradingClock.GetIntervalMs(MarketStatus.Open) == 3000);
             Assert(TradingClock.GetIntervalMs(MarketStatus.Lunch) == 60000);
