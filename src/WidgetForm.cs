@@ -8,16 +8,16 @@ using System.Windows.Forms;
 public sealed class WidgetForm : Form
 {
     [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll")]
+    private static extern bool IsWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
     private static extern bool IsIconic(IntPtr hWnd);
 
     [DllImport("user32.dll")]
-    private static extern bool GetWindowPlacement(IntPtr hWnd, ref WINDOWPLACEMENT lpwndpl);
-
-    [DllImport("user32.dll")]
-    private static extern bool SetWindowPlacement(IntPtr hWnd, [In] ref WINDOWPLACEMENT lpwndpl);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr GetForegroundWindow();
+    private static extern bool IsWindowVisible(IntPtr hWnd);
 
     [DllImport("user32.dll")]
     private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
@@ -41,29 +41,6 @@ public sealed class WidgetForm : Form
     private delegate IntPtr LowLevelKeyboardProc(int nCode, IntPtr wParam, IntPtr lParam);
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct POINT
-    {
-        public int X, Y;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct RECT
-    {
-        public int Left, Top, Right, Bottom;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct WINDOWPLACEMENT
-    {
-        public uint length;
-        public uint flags;
-        public uint showCmd;
-        public POINT ptMinPosition;
-        public POINT ptMaxPosition;
-        public RECT rcNormalPosition;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
     private struct KBDLLHOOKSTRUCT
     {
         public int vkCode;
@@ -73,16 +50,14 @@ public sealed class WidgetForm : Form
         public IntPtr dwExtraInfo;
     }
 
-    private const int SW_SHOWNOACTIVATE = 4;
     private const int WS_EX_TOOLWINDOW = 0x00000080;
     private const int WS_EX_NOACTIVATE = 0x08000000;
     private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
     private static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
-    private static readonly IntPtr HWND_TOP = IntPtr.Zero;
+    private static readonly IntPtr HWND_BOTTOM = new IntPtr(1);
     private const uint SWP_NOSIZE = 0x0001;
     private const uint SWP_NOMOVE = 0x0002;
     private const uint SWP_NOACTIVATE = 0x0010;
-    private const uint SWP_SHOWWINDOW = 0x0040;
 
     private const int WH_KEYBOARD_LL = 13;
     private const int WM_KEYDOWN = 0x0100;
@@ -98,6 +73,8 @@ public sealed class WidgetForm : Form
     private bool _winKeyDown;
     private bool _winDToggle;
     private bool _hideOnWinD;
+    private bool _lastDesktopShown;
+    private IntPtr _lastAppFg = IntPtr.Zero;
 
     private readonly Font _rowFont = new Font("Microsoft YaHei UI", 10f);
     private readonly List<Label> _rowNameLabels = new List<Label>();
@@ -315,17 +292,51 @@ public sealed class WidgetForm : Form
                 Hide();
                 return;
             }
-            // hideOnWinD=false：Win+D 时拉到最前，只做一次
-            BringToTopNonTopMost();
-            return;
         }
 
-        if (_hideOnWinD && !Visible)
+        if (_hideOnWinD)
         {
-            if (!IsDesktopForeground())
+            if (!Visible && !IsDesktopForeground())
                 Show();
             return;
         }
+
+        IntPtr fg = GetForegroundWindow();
+        string fgCls = GetClassNameOf(fg);
+
+        if (fgCls == "Shell_TrayWnd")
+            return;
+
+        bool desktopFg = fgCls == "Progman" || fgCls == "WorkerW";
+
+        if (!desktopFg)
+        {
+            _lastAppFg = fg;
+            if (_lastDesktopShown)
+            {
+                _lastDesktopShown = false;
+                // 桌面退出：立即降回普通层并压到底，避免悬停在刚恢复的软件上
+                SetWindowPos(Handle, HWND_NOTOPMOST, 0, 0, 0, 0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                SetWindowPos(Handle, HWND_BOTTOM, 0, 0, 0, 0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+            }
+            return;
+        }
+
+        if (_lastDesktopShown)
+            return;
+
+        // 只有前一个前台应用已不可见/最小化（Win+D 隐藏全部窗口）才算"显示桌面"，
+        // 单纯点击壁纸（应用仍可见）不置顶，避免压在应用窗口上
+        if (_lastAppFg != IntPtr.Zero && IsWindow(_lastAppFg)
+            && IsWindowVisible(_lastAppFg) && !IsIconic(_lastAppFg))
+            return;
+
+        _lastDesktopShown = true;
+        // Win11 显示桌面是 DWM 特殊层，普通 z-order 压不过，需保持 TOPMOST
+        SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
 
     private void StartQuoteTimer(int intervalMs)
@@ -413,19 +424,17 @@ public sealed class WidgetForm : Form
         }
     }
 
-    private void BringToTopNonTopMost()
+    private static string GetClassNameOf(IntPtr hWnd)
     {
-        SetWindowPos(Handle, HWND_TOP, 0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        if (hWnd == IntPtr.Zero) return "";
+        var sb = new System.Text.StringBuilder(256);
+        GetClassName(hWnd, sb, 256);
+        return sb.ToString();
     }
 
     private static bool IsDesktopForeground()
     {
-        IntPtr fg = GetForegroundWindow();
-        if (fg == IntPtr.Zero) return false;
-        var sb = new System.Text.StringBuilder(256);
-        GetClassName(fg, sb, 256);
-        string cls = sb.ToString();
+        string cls = GetClassNameOf(GetForegroundWindow());
         return cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd";
     }
 
