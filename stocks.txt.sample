@@ -1,0 +1,8 @@
+# 股票代码：一行一个 6 位数字，# 后为注释
+600519
+000001
+300750
+
+# 配置项：hideOnWinD=true 时按 Win+D 隐藏挂件，打开任意软件自动恢复
+# 默认 false：Win+D 时挂件显示在最前
+hideOnWinD=false

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Windows.Forms;
 
 static class Program
@@ -11,9 +12,20 @@ static class Program
         if (args.Length >= 1 && args[0] == "--fetch")
             return RunFetch(args);
 
-        string configPath = StockList.ResolveConfigPath(args);
-        Application.EnableVisualStyles();
-        Application.Run(new WidgetForm(configPath));
+        bool created;
+        using (var mutex = new Mutex(true, @"Local\StockWidget_SingleInstance", out created))
+        {
+            if (!created)
+            {
+                MessageBox.Show("股票挂件已在运行", "StockWidget");
+                return 0;
+            }
+            Autostart.Ensure();
+            string configPath = StockList.ResolveConfigPath(args);
+            Application.EnableVisualStyles();
+            Application.Run(new WidgetForm(configPath));
+            GC.KeepAlive(mutex);
+        }
         return 0;
     }
 
