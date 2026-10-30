@@ -52,6 +52,7 @@ Windows 桌面常驻小挂件：切回桌面即可看到 1–3 只 A 股的名�
 - （增补 2）异常兜底：UI/AppDomain 未处理异常记入 `%APPDATA%\StockWidget\error.log`（超 1MB 轮转）后继续运行，不闪退
 - （增补 3）发布准备：exe 图标（`scripts/make-icon.mjs` 生成 `src/app.ico`，深色圆角+红绿蜡烛线）+ AssemblyInfo 版本号；`autostart=true|false`（默认 true，false 移除自启项，热生效）；自启项保留 `--config` 参数；`v*` tag 触发 CI 自动挂 GitHub Release
 - （增补 4）v1.2.0：行别名（代码后空格跟自定义名，别名优先于服务器名，tooltip 带出代码+服务器名，别名变更热生效）；`showPrice=true` 显示现价列（默认关；UiMetrics.PriceColumnWidth 56×缩放，关闭时布局与 v1.1 逐像素一致）
+- （增补 5）v1.2.1：A 股节假日表（`HolidayCalendar`，内置上交所 2026 休市安排共 19 个非周末休市日）；工作日命中→Closed（60 秒轮询），调休上班的周末仍按 Weekend 处理；未覆盖年份无害退化（退回周末/时段判断）
 - 网络异常：保留上次数据，角标提示"网络异常"，不崩溃、不闪退
 
 ## 留给 builder

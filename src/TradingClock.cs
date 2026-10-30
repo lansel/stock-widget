@@ -20,6 +20,9 @@ public static class TradingClock
         DayOfWeek day = now.DayOfWeek;
         if (day == DayOfWeek.Saturday || day == DayOfWeek.Sunday)
             return MarketStatus.Weekend;
+        // 法定假日（工作日）休市；调休上班的周末已在上面的周末分支处理
+        if (HolidayCalendar.IsClosed(now))
+            return MarketStatus.Closed;
 
         TimeSpan t = now.TimeOfDay;
         if (t >= OpenStart && t < LunchStart) return MarketStatus.Open;
