@@ -8,8 +8,11 @@ using System.Text.RegularExpressions;
 public class WidgetSettings
 {
     public List<string> Codes = new List<string>();
+    // 与 Codes 平行的自定义显示名，无别名时为空串
+    public List<string> Aliases = new List<string>();
     public bool HideOnWinD = false;
     public bool Autostart = true;
+    public bool ShowPrice = false;
     public double Opacity = 0.92;
     public Color BgColor = Color.FromArgb(32, 32, 36);
     public Color NameColor = Color.WhiteSmoke;
@@ -58,6 +61,11 @@ public static class StockList
                         s.Opacity = Math.Max(0.1, Math.Min(1.0, v));
                     continue;
                 }
+                if (key.Equals("showPrice", StringComparison.OrdinalIgnoreCase))
+                {
+                    s.ShowPrice = val.Equals("true", StringComparison.OrdinalIgnoreCase);
+                    continue;
+                }
                 if (key.Equals("bgColor", StringComparison.OrdinalIgnoreCase))
                 {
                     Color c;
@@ -72,13 +80,23 @@ public static class StockList
                 }
             }
 
-            if ((Regex.IsMatch(line, @"^\d{6}$") ||
-                 Regex.IsMatch(line, @"^(sh|sz|bj)\d{6}$", RegexOptions.IgnoreCase) ||
-                 Regex.IsMatch(line, @"^1A\d{4}$", RegexOptions.IgnoreCase))
-                && seen.Add(line))
-                s.Codes.Add(line);
+            string[] parts = line.Split(new[] { ' ', '\t' }, 2, StringSplitOptions.RemoveEmptyEntries);
+            string code = parts[0];
+            string alias = parts.Length > 1 ? parts[1].Trim() : "";
+            if (IsCode(code) && seen.Add(code))
+            {
+                s.Codes.Add(code);
+                s.Aliases.Add(alias);
+            }
         }
         return s;
+    }
+
+    private static bool IsCode(string code)
+    {
+        return Regex.IsMatch(code, @"^\d{6}$") ||
+            Regex.IsMatch(code, @"^(sh|sz|bj)\d{6}$", RegexOptions.IgnoreCase) ||
+            Regex.IsMatch(code, @"^1A\d{4}$", RegexOptions.IgnoreCase);
     }
 
     private static string StripInlineComment(string line)

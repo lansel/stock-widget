@@ -79,6 +79,22 @@ static class SelfTest
             Assert(!StockList.ParseWidgetSettings("autostart=false\n").Autostart);
             Assert(StockList.ParseWidgetSettings("autostart=true\nautostart=yes\n").Autostart);
         });
+        fail += Run("StockList.ParseWidgetSettings alias", () => {
+            var s = StockList.ParseWidgetSettings("600519 茅台\n000001\nsh000300 沪深300\n");
+            Assert(s.Codes.Count == 3 && s.Aliases.Count == 3);
+            Assert(s.Codes[0] == "600519" && s.Aliases[0] == "茅台");
+            Assert(s.Aliases[1] == "");
+            Assert(s.Codes[2] == "sh000300" && s.Aliases[2] == "沪深300");
+        });
+        fail += Run("StockList alias dedupe comment and invalid", () => {
+            var s = StockList.ParseWidgetSettings("600519 A\n600519 B # 注\n600519\tC\nabc 名字\n000001\n");
+            Assert(s.Codes.Count == 2 && s.Aliases[0] == "A" && s.Aliases[1] == "");
+        });
+        fail += Run("StockList.ParseWidgetSettings showPrice", () => {
+            Assert(!StockList.ParseWidgetSettings("600519\n").ShowPrice);
+            Assert(StockList.ParseWidgetSettings("showPrice=true\n600519\n").ShowPrice);
+            Assert(!StockList.ParseWidgetSettings("showPrice=yes\n").ShowPrice);
+        });
         fail += Run("StockList.LoadSettingsOrDefault", () => {
             var d = StockList.LoadSettingsOrDefault(@"E:\no_such_dir\stocks.txt");
             Assert(d.Autostart && d.Codes.Count == 0);
