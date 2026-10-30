@@ -36,6 +36,13 @@ static class SelfTest
             Assert(StockList.ToSymbol("1A0001") == "sh000001");
             Assert(StockList.ToSymbol("sh000001") == "sh000001");
             Assert(StockList.ToSymbol("SZ399001") == "sz399001");
+            Assert(StockList.ToSymbol("000016") == "sh000016");
+            Assert(StockList.ToSymbol("000300") == "sh000300");
+            Assert(StockList.ToSymbol("000688") == "sh000688");
+            Assert(StockList.ToSymbol("000852") == "sh000852");
+            Assert(StockList.ToSymbol("000905") == "sh000905");
+            Assert(StockList.ToSymbol("399001") == "sz399001");
+            Assert(StockList.ToSymbol("399006") == "sz399006");
         });
         fail += Run("StockList.GetConfigPath on desktop", () => {
             Assert(StockList.GetConfigPath().EndsWith("stocks.txt"));

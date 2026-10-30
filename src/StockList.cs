@@ -102,13 +102,31 @@ public static class StockList
         return true;
     }
 
+    private static readonly Dictionary<string, string> IndexSymbols = new Dictionary<string, string>
+    {
+        { "1A0001", "sh000001" },  // 上证指数
+        { "000016", "sh000016" },  // 上证50
+        { "000300", "sh000300" },  // 沪深300
+        { "000688", "sh000688" },  // 科创50
+        { "000852", "sh000852" },  // 中证1000
+        { "000905", "sh000905" },  // 中证500
+        { "399001", "sz399001" },  // 深证成指
+        { "399006", "sz399006" },  // 创业板指
+        { "399005", "sz399005" },  // 中小100
+        { "399303", "sz399303" },  // 国证2000
+    };
+
     public static string ToSymbol(string code)
     {
         code = code.Trim();
         // 已带 sh/sz/bj 前缀的直接返回（小写）
         if (Regex.IsMatch(code, @"^(sh|sz|bj)\d{6}$", RegexOptions.IgnoreCase))
             return code.ToLower();
-        // 指数代码：1A0001 → sh000001（上证指数）
+        // 常见指数代码映射
+        string idx;
+        if (IndexSymbols.TryGetValue(code.ToUpper(), out idx))
+            return idx;
+        // 指数代码：1A0001 → sh000001
         if (Regex.IsMatch(code, @"^1A\d{4}$", RegexOptions.IgnoreCase))
             return "sh00" + code.Substring(2);
         if (code.StartsWith("92")) return "bj" + code;
