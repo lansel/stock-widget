@@ -78,6 +78,7 @@ public sealed class WidgetForm : Form
     private const int WS_EX_NOACTIVATE = 0x08000000;
     private static readonly IntPtr HWND_TOPMOST = new IntPtr(-1);
     private static readonly IntPtr HWND_NOTOPMOST = new IntPtr(-2);
+    private static readonly IntPtr HWND_TOP = IntPtr.Zero;
     private const uint SWP_NOSIZE = 0x0001;
     private const uint SWP_NOMOVE = 0x0002;
     private const uint SWP_NOACTIVATE = 0x0010;
@@ -314,6 +315,9 @@ public sealed class WidgetForm : Form
                 Hide();
                 return;
             }
+            // hideOnWinD=false：Win+D 时拉到最前，只做一次
+            BringToTopNonTopMost();
+            return;
         }
 
         if (_hideOnWinD && !Visible)
@@ -322,9 +326,6 @@ public sealed class WidgetForm : Form
                 Show();
             return;
         }
-
-        if (IsDesktopForeground())
-            BringToTopNonTopMost();
     }
 
     private void StartQuoteTimer(int intervalMs)
@@ -414,9 +415,7 @@ public sealed class WidgetForm : Form
 
     private void BringToTopNonTopMost()
     {
-        SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
-        SetWindowPos(Handle, HWND_NOTOPMOST, 0, 0, 0, 0,
+        SetWindowPos(Handle, HWND_TOP, 0, 0, 0, 0,
             SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
     }
 
