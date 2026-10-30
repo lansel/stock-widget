@@ -1,5 +1,7 @@
 # 股票挂件（StockWidget）
 
+[![build](https://img.shields.io/github/actions/workflow/status/lansel/stock-widget/build.yml?branch=master&label=build)](https://github.com/lansel/stock-widget/actions/workflows/build.yml)
+
 Windows 桌面常驻小挂件，实时显示 A 股/指数涨跌幅。零安装，单个 exe，双击即用。
 
 ## 下载
