@@ -28,9 +28,15 @@ public static class QuoteParser
             var q = new Quote();
             q.Code = m.Groups[1].Value;
             q.Name = fields[1];
-            q.Price = double.Parse(fields[3], CultureInfo.InvariantCulture);
-            q.PrevClose = double.Parse(fields[4], CultureInfo.InvariantCulture);
-            q.Pct = double.Parse(fields[32], CultureInfo.InvariantCulture);
+            double price;
+            double prevClose;
+            double pct;
+            if (!double.TryParse(fields[3], NumberStyles.Float, CultureInfo.InvariantCulture, out price)) continue;
+            if (!double.TryParse(fields[4], NumberStyles.Float, CultureInfo.InvariantCulture, out prevClose)) continue;
+            if (!double.TryParse(fields[32], NumberStyles.Float, CultureInfo.InvariantCulture, out pct)) continue;
+            q.Price = price;
+            q.PrevClose = prevClose;
+            q.Pct = pct;
             result[q.Code] = q;
         }
         return result;

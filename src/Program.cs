@@ -17,7 +17,6 @@ static class Program
         {
             if (!created)
             {
-                MessageBox.Show("股票挂件已在运行", "StockWidget");
                 return 0;
             }
             Autostart.Ensure();

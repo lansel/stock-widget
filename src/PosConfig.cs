@@ -54,10 +54,14 @@ public static class PosConfig
         catch { }
     }
 
-    public static Point Clamp(Point p, Rectangle area)
+    public static Point Clamp(Point p, Rectangle area, Size size)
     {
-        int x = Math.Max(area.Left, Math.Min(p.X, area.Right - 1));
-        int y = Math.Max(area.Top, Math.Min(p.Y, area.Bottom - 1));
+        int maxX = area.Right - size.Width;
+        int maxY = area.Bottom - size.Height;
+        if (maxX < area.Left) maxX = area.Left;
+        if (maxY < area.Top) maxY = area.Top;
+        int x = Math.Max(area.Left, Math.Min(p.X, maxX));
+        int y = Math.Max(area.Top, Math.Min(p.Y, maxY));
         return new Point(x, y);
     }
 }

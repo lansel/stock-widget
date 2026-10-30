@@ -18,19 +18,7 @@ public static class StockList
 {
     public static List<string> ParseFileContent(string content)
     {
-        var result = new List<string>();
-        if (content == null) return result;
-        var seen = new HashSet<string>();
-        content = content.TrimStart('\uFEFF');
-        string[] lines = content.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
-        foreach (string raw in lines)
-        {
-            string line = raw.Trim();
-            if (line.Length == 0 || line.StartsWith("#")) continue;
-            if (!Regex.IsMatch(line, @"^\d{6}$")) continue;
-            if (seen.Add(line)) result.Add(line);
-        }
-        return result;
+        return ParseWidgetSettings(content).Codes;
     }
 
     public static WidgetSettings ParseWidgetSettings(string content)
@@ -42,6 +30,7 @@ public static class StockList
         foreach (string raw in content.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
         {
             string line = raw.Trim();
+            line = StripInlineComment(line);
             if (line.Length == 0 || line.StartsWith("#")) continue;
 
             int eq = line.IndexOf('=');
@@ -84,6 +73,19 @@ public static class StockList
                 s.Codes.Add(line);
         }
         return s;
+    }
+
+    private static string StripInlineComment(string line)
+    {
+        int hash = line.IndexOf('#');
+        if (hash < 0) return line;
+        int eq = line.IndexOf('=');
+        if (eq > 0)
+        {
+            string value = line.Substring(eq + 1).TrimStart();
+            if (value.StartsWith("#")) return line;
+        }
+        return line.Substring(0, hash).TrimEnd();
     }
 
     private static bool TryParseColor(string val, out Color color)

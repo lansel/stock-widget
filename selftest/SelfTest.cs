@@ -75,12 +75,123 @@ static class SelfTest
             Assert(PosConfig.Load(Path.Combine(Path.GetTempPath(), "no_such_pos.ini")) == Point.Empty);
             File.Delete(p);
         });
-        fail += Run("PosConfig.Clamp", () => {
+        fail += Run("PosConfig.Clamp with size", () => {
             var area = new Rectangle(0, 0, 1920, 1040);
-            Assert(PosConfig.Clamp(new Point(-50, 10), area) == new Point(0, 10));
-            Assert(PosConfig.Clamp(new Point(10, -5), area) == new Point(10, 0));
-            Assert(PosConfig.Clamp(new Point(5000, 5000), area) == new Point(1919, 1039));
-            Assert(PosConfig.Clamp(new Point(100, 100), area) == new Point(100, 100));
+            var size = new Size(190, 60);
+            Assert(PosConfig.Clamp(new Point(-50, 10), area, size) == new Point(0, 10));
+            Assert(PosConfig.Clamp(new Point(10, -5), area, size) == new Point(10, 0));
+            Assert(PosConfig.Clamp(new Point(5000, 5000), area, size) == new Point(1730, 980));
+            Assert(PosConfig.Clamp(new Point(1800, 1000), area, size) == new Point(1730, 980));
+            Assert(PosConfig.Clamp(new Point(100, 100), area, size) == new Point(100, 100));
+            var small = new Rectangle(0, 0, 100, 40);
+            Assert(PosConfig.Clamp(new Point(10, 10), small, size) == new Point(0, 0));
+        });
+        fail += Run("ConfigWatcher missing startup", () => {
+            string p = NewConfigPath();
+            var w = new ConfigWatcher(p);
+            var s = w.Poll(DateTime.UtcNow);
+            Assert(s.Changed && !s.Exists && s.Settings.Codes.Count == 0);
+        });
+        fail += Run("ConfigWatcher code change immediate", () => {
+            string p = NewConfigPath();
+            try {
+                WriteConfig(p, "600519\n000001\n");
+                var w = new ConfigWatcher(p);
+                var t = DateTime.UtcNow;
+                var s1 = w.Poll(t);
+                Assert(s1.Changed && s1.Exists && s1.Settings.Codes.Count == 2);
+                WriteConfig(p, "600519\n");
+                var s2 = w.Poll(t.AddMilliseconds(250));
+                Assert(s2.Changed && s2.Settings.Codes.Count == 1);
+            } finally { if (File.Exists(p)) File.Delete(p); }
+        });
+        fail += Run("ConfigWatcher empty debounce", () => {
+            string p = NewConfigPath();
+            try {
+                WriteConfig(p, "600519\n");
+                var w = new ConfigWatcher(p);
+                var t = DateTime.UtcNow;
+                Assert(w.Poll(t).Settings.Codes.Count == 1);
+                WriteConfig(p, "");
+                var a = w.Poll(t.AddMilliseconds(250));
+                Assert(!a.Changed && a.Settings.Codes.Count == 1);
+                var b = w.Poll(t.AddMilliseconds(800));
+                Assert(b.Changed && b.Exists && b.Settings.Codes.Count == 0);
+            } finally { if (File.Exists(p)) File.Delete(p); }
+        });
+        fail += Run("ConfigWatcher recover during debounce", () => {
+            string p = NewConfigPath();
+            try {
+                WriteConfig(p, "600519\n");
+                var w = new ConfigWatcher(p);
+                var t = DateTime.UtcNow;
+                Assert(w.Poll(t).Settings.Codes.Count == 1);
+                WriteConfig(p, "");
+                Assert(!w.Poll(t.AddMilliseconds(250)).Changed);
+                WriteConfig(p, "000001\n");
+                var r = w.Poll(t.AddMilliseconds(300));
+                Assert(r.Changed && r.Settings.Codes.Count == 1 && r.Settings.Codes[0] == "000001");
+            } finally { if (File.Exists(p)) File.Delete(p); }
+        });
+        fail += Run("ConfigWatcher missing debounce", () => {
+            string p = NewConfigPath();
+            try {
+                WriteConfig(p, "600519\n");
+                var w = new ConfigWatcher(p);
+                var t = DateTime.UtcNow;
+                Assert(w.Poll(t).Settings.Codes.Count == 1);
+                File.Delete(p);
+                var a = w.Poll(t.AddMilliseconds(250));
+                Assert(!a.Changed && a.Settings.Codes.Count == 1);
+                var b = w.Poll(t.AddMilliseconds(800));
+                Assert(b.Changed && !b.Exists && b.Settings.Codes.Count == 0);
+            } finally { if (File.Exists(p)) File.Delete(p); }
+        });
+        fail += Run("ConfigWatcher settings only", () => {
+            string p = NewConfigPath();
+            try {
+                WriteConfig(p, "nameColor=#FF0000\n");
+                var w = new ConfigWatcher(p);
+                var s = w.Poll(DateTime.UtcNow);
+                Assert(s.Changed && s.Exists && s.Settings.Codes.Count == 0);
+                Assert(s.Settings.NameColor.R == 255 && s.Settings.NameColor.G == 0);
+            } finally { if (File.Exists(p)) File.Delete(p); }
+        });
+        fail += Run("DesktopShowState hide on Win+D", () => {
+            var d = DesktopShowState.Decide(DS(true, true, true, ForegroundKind.Desktop, false, false, false, false));
+            Assert(d.Command == DesktopCommand.Hide && d.ClearWinDToggle);
+        });
+        fail += Run("DesktopShowState Win+D while hidden stays hidden", () => {
+            var d = DesktopShowState.Decide(DS(true, true, false, ForegroundKind.App, false, false, false, false));
+            Assert(d.Command == DesktopCommand.None && d.ClearWinDToggle);
+        });
+        fail += Run("DesktopShowState hidden app restores", () => {
+            var d = DesktopShowState.Decide(DS(true, false, false, ForegroundKind.App, false, false, false, false));
+            Assert(d.Command == DesktopCommand.Show);
+        });
+        fail += Run("DesktopShowState hidden desktop stays", () => {
+            var d = DesktopShowState.Decide(DS(true, false, false, ForegroundKind.Desktop, false, false, false, false));
+            Assert(d.Command == DesktopCommand.None);
+        });
+        fail += Run("DesktopShowState leaving desktop drops", () => {
+            var d = DesktopShowState.Decide(DS(false, false, true, ForegroundKind.App, false, false, false, true));
+            Assert(d.Command == DesktopCommand.DropToBottom && !d.LastDesktopShown);
+        });
+        fail += Run("DesktopShowState wallpaper click no topmost", () => {
+            var d = DesktopShowState.Decide(DS(false, false, true, ForegroundKind.Desktop, true, true, false, false));
+            Assert(d.Command == DesktopCommand.None);
+        });
+        fail += Run("DesktopShowState Win+D topmost", () => {
+            var d = DesktopShowState.Decide(DS(false, false, true, ForegroundKind.Desktop, true, false, false, false));
+            Assert(d.Command == DesktopCommand.SetTopMost && d.LastDesktopShown);
+        });
+        fail += Run("DesktopShowState taskbar no action", () => {
+            var d = DesktopShowState.Decide(DS(false, false, true, ForegroundKind.Taskbar, true, true, false, false));
+            Assert(d.Command == DesktopCommand.None);
+        });
+        fail += Run("DesktopShowState default mode clears Win+D flag", () => {
+            var d = DesktopShowState.Decide(DS(false, true, true, ForegroundKind.App, false, false, false, false));
+            Assert(d.Command == DesktopCommand.None && d.ClearWinDToggle);
         });
         fail += Run("QuoteParser.Parse multi entry", () => {
             string text = TEntry("sh600519", "600519", "\u8d35\u5dde\u8305\u53f0", "1369.04", "1.11")
@@ -102,6 +213,22 @@ static class SelfTest
             Assert(QuoteParser.FormatPct(-0.61) == "-0.61%");
             Assert(QuoteParser.FormatPct(0) == "0.00%");
             Assert(QuoteParser.FormatPct(2.5) == "+2.50%");
+        });
+        fail += Run("QuoteParser.Parse malformed numbers", () => {
+            string good = TEntry("sh600519", "600519", "A", "1369.04", "1.11");
+            string emptyPrice = TEntry("sz000001", "000001", "B", "", "0.50");
+            string badPct = TEntry("sz300750", "300750", "C", "200.00", "abc");
+            var r = QuoteParser.Parse(good + ";\n" + emptyPrice + ";\n" + badPct + ";");
+            Assert(r.Count == 1);
+            Assert(r["sh600519"].Pct == 1.11);
+        });
+        fail += Run("StockList inline comments", () => {
+            var s = StockList.ParseWidgetSettings(
+                "600519 # x\n000001#y\nhideOnWinD=true # z\nopacity=0.9 # dim\nbgColor=#202024\n");
+            Assert(s.Codes.Count == 2 && s.Codes[0] == "600519" && s.Codes[1] == "000001");
+            Assert(s.HideOnWinD);
+            Assert(Math.Abs(s.Opacity - 0.9) < 0.0001);
+            Assert(s.BgColor.R == 0x20 && s.BgColor.G == 0x20 && s.BgColor.B == 0x24);
         });
         fail += Run("TradingClock boundaries", () => {
             var sat = new DateTime(2026, 10, 31, 10, 0, 0);
@@ -138,6 +265,28 @@ static class SelfTest
         });
         Console.WriteLine(fail == 0 ? "ALL PASS" : fail + " FAILED");
         return fail == 0 ? 0 : 1;
+    }
+
+    static int _writeTick;
+    static string NewConfigPath()
+    {
+        return Path.Combine(Path.GetTempPath(), "sw_cfg_" + Guid.NewGuid().ToString("N") + ".txt");
+    }
+
+    static void WriteConfig(string path, string text)
+    {
+        File.WriteAllText(path, text);
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(++_writeTick));
+    }
+
+    static DesktopState DS(bool hide, bool winD, bool visible, ForegroundKind fg,
+        bool lastExists, bool lastVisible, bool lastIconic, bool lastShown)
+    {
+        return new DesktopState {
+            HideOnWinD = hide, WinDToggled = winD, WidgetVisible = visible,
+            Foreground = fg, LastAppExists = lastExists, LastAppVisible = lastVisible,
+            LastAppIconic = lastIconic, LastDesktopShown = lastShown
+        };
     }
 
     static string TEntry(string sym, string code, string name, string price, string pct)

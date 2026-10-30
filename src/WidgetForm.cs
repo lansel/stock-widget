@@ -68,6 +68,10 @@ public sealed class WidgetForm : Form
 
     private readonly Timer _zTick;
     private readonly string _configPath;
+    private readonly UiMetrics _metrics;
+    private readonly RowView _rows;
+    private readonly ContextMenuStrip _menu;
+    private readonly ConfigWatcher _config;
     private LowLevelKeyboardProc _keyboardProc;
     private IntPtr _hookId = IntPtr.Zero;
     private bool _winKeyDown;
@@ -76,62 +80,57 @@ public sealed class WidgetForm : Form
     private bool _lastDesktopShown;
     private IntPtr _lastAppFg = IntPtr.Zero;
 
-    private readonly Font _rowFont = new Font("Microsoft YaHei UI", 10f);
-    private readonly List<Label> _rowNameLabels = new List<Label>();
-    private readonly List<Label> _rowPctLabels = new List<Label>();
     private List<string> _codes = new List<string>();
     private Dictionary<string, Quote> _quotes = new Dictionary<string, Quote>();
     private bool _fetchBusy;
+    private bool _stale;
     private Timer _quoteTimer;
-    private Point _dragStart;
+    private Point _dragStartScreen;
+    private Point _formStart;
     private bool _dragging;
-
-    private static readonly Color ColorUp = Color.FromArgb(230, 70, 70);
-    private static readonly Color ColorDown = Color.FromArgb(50, 190, 120);
-    private static readonly Color ColorFlat = Color.Gray;
-
-    private const int RowHeight = 26;
-    private const int MarginX = 12;
-    private const int MarginY = 10;
 
     public WidgetForm(string configPath)
     {
         _configPath = configPath;
+        _metrics = UiMetrics.FromSystemDpi();
 
         FormBorderStyle = FormBorderStyle.None;
         ShowInTaskbar = false;
         TopMost = false;
         StartPosition = FormStartPosition.Manual;
+        AutoScaleMode = AutoScaleMode.None;
         BackColor = Color.FromArgb(32, 32, 36);
         Opacity = 0.92;
-        Size = new Size(190, 60);
+        Size = new Size(_metrics.Width, _metrics.MinHeight);
 
-        Point saved = PosConfig.Load(PosConfig.DefaultPath);
-        if (saved == Point.Empty)
-        {
-            Location = new Point(
-                Screen.PrimaryScreen.WorkingArea.Right - Width - 24,
-                Screen.PrimaryScreen.WorkingArea.Top + 24);
-        }
-        else
-        {
-            Location = PosConfig.Clamp(saved, Screen.PrimaryScreen.WorkingArea);
-        }
+        _menu = new ContextMenuStrip();
+        var exitItem = new ToolStripMenuItem("退出");
+        exitItem.Click += OnExitClick;
+        _menu.Items.Add(exitItem);
+        ContextMenuStrip = _menu;
 
-        MouseDown += OnFormMouseDown;
-        MouseMove += OnFormMouseMove;
-        MouseUp += OnFormMouseUp;
+        _rows = new RowView(this, _metrics, ConfigureRowTarget);
+
+        MouseDown += OnDragMouseDown;
+        MouseMove += OnDragMouseMove;
+        MouseUp += OnDragMouseUp;
         Resize += OnFormResize;
+        FormClosing += OnFormClosing;
 
         _zTick = new Timer();
         _zTick.Interval = 250;
         _zTick.Tick += OnZTick;
         _zTick.Start();
 
-        ReloadConfigAndRebuild();
-        InstallKeyboardHook();
+        _quoteTimer = new Timer();
+        _quoteTimer.Tick += OnQuoteTick;
+
+        _config = new ConfigWatcher(_configPath);
+        ApplySnapshot(_config.Poll(DateTime.UtcNow), true);
+        ApplySavedPosition();
+        UpdateKeyboardHook();
         StartQuoteTimer(TradingClock.GetIntervalMs(TradingClock.GetStatus(DateTime.Now)));
-        FetchOnce();
+        Shown += OnFormShown;
         ApplyRoundedRegion();
     }
 
@@ -160,91 +159,105 @@ public sealed class WidgetForm : Form
                 _hookId = IntPtr.Zero;
             }
             if (_quoteTimer != null) _quoteTimer.Dispose();
-            _rowFont.Dispose();
+            if (_zTick != null) _zTick.Dispose();
+            if (_rows != null) _rows.Dispose();
+            if (_menu != null)
+            {
+                ContextMenuStrip = null;
+                _menu.Dispose();
+            }
         }
         base.Dispose(disposing);
     }
 
-    private Color _nameColor = Color.WhiteSmoke;
-
-    private void ReloadConfigAndRebuild()
+    private void ApplySnapshot(ConfigSnapshot snapshot, bool initial)
     {
-        try
+        if (snapshot == null) return;
+        if (!initial && !snapshot.Changed) return;
+
+        WidgetSettings settings = snapshot.Settings;
+        if (settings == null) settings = new WidgetSettings();
+
+        bool oldHide = _hideOnWinD;
+        _hideOnWinD = settings.HideOnWinD;
+        Opacity = settings.Opacity;
+        BackColor = settings.BgColor;
+        _rows.SetNameColor(settings.NameColor);
+
+        bool rebuilt = _rows.SetCodes(settings.Codes, snapshot.Exists);
+        if (rebuilt)
         {
-            if (!string.IsNullOrEmpty(_configPath) && File.Exists(_configPath))
-            {
-                var settings = StockList.ParseWidgetSettings(File.ReadAllText(_configPath));
-                _hideOnWinD = settings.HideOnWinD;
-                Opacity = settings.Opacity;
-                BackColor = settings.BgColor;
-                _nameColor = settings.NameColor;
-                bool changed = !SameCodes(_codes, settings.Codes);
-                _codes = settings.Codes;
-                if (changed) RebuildRows();
-            }
-            else
-            {
-                _hideOnWinD = false;
-                if (_codes.Count > 0)
-                {
-                    _codes = new List<string>();
-                    RebuildRows();
-                }
-            }
-        }
-        catch { }
-    }
-
-    private static bool SameCodes(List<string> a, List<string> b)
-    {
-        if (a.Count != b.Count) return false;
-        for (int i = 0; i < a.Count; i++)
-            if (a[i] != b[i]) return false;
-        return true;
-    }
-
-    private void RebuildRows()
-    {
-        foreach (var l in _rowNameLabels) { Controls.Remove(l); l.Dispose(); }
-        foreach (var l in _rowPctLabels) { Controls.Remove(l); l.Dispose(); }
-        _rowNameLabels.Clear();
-        _rowPctLabels.Clear();
-
-        for (int i = 0; i < _codes.Count; i++)
-        {
-            var name = new Label();
-            name.Font = _rowFont;
-            name.ForeColor = _nameColor;
-            name.AutoSize = true;
-            name.Text = _codes[i];
-            Controls.Add(name);
-            _rowNameLabels.Add(name);
-
-            var pct = new Label();
-            pct.Font = _rowFont;
-            pct.AutoSize = true;
-            pct.Text = "--";
-            pct.ForeColor = ColorFlat;
-            Controls.Add(pct);
-            _rowPctLabels.Add(pct);
+            _codes = new List<string>(settings.Codes);
+            EnsureOnScreen();
+            if (!initial && _codes.Count > 0 && Visible) FetchOnce();
         }
 
-        LayoutRows();
+        if (!initial && oldHide != _hideOnWinD)
+            ApplyHideModeChange(_hideOnWinD);
+
+        _rows.SetStale(_stale && _codes.Count > 0);
     }
 
-    private void LayoutRows()
+    private void ApplyHideModeChange(bool hide)
     {
-        int y = MarginY;
-        for (int i = 0; i < _rowNameLabels.Count; i++)
-        {
-            _rowNameLabels[i].Location = new Point(MarginX, y);
-            _rowPctLabels[i].Location = new Point(MarginX + 96, y);
-            y += RowHeight;
-        }
+        ResetDesktopState();
+        SetWindowPos(Handle, HWND_NOTOPMOST, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        SetWindowPos(Handle, HWND_BOTTOM, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+        UpdateKeyboardHook();
+        if (!hide && !Visible) ShowWidget();
+    }
 
-        int h = y + MarginY;
-        if (h < 50) h = 50;
-        Size = new Size(Width, h);
+    private void ResetDesktopState()
+    {
+        _winKeyDown = false;
+        _winDToggle = false;
+        _lastDesktopShown = false;
+        _lastAppFg = IntPtr.Zero;
+    }
+
+    private void UpdateKeyboardHook()
+    {
+        if (_hideOnWinD)
+        {
+            if (_hookId == IntPtr.Zero) InstallKeyboardHook();
+        }
+        else if (_hookId != IntPtr.Zero)
+        {
+            UnhookWindowsHookEx(_hookId);
+            _hookId = IntPtr.Zero;
+            _winKeyDown = false;
+            _winDToggle = false;
+        }
+    }
+
+    private void ShowWidget()
+    {
+        if (Visible) return;
+        Show();
+        _quoteTimer.Start();
+        FetchOnce();
+    }
+
+    private void HideWidget()
+    {
+        if (!Visible) return;
+        Hide();
+        _quoteTimer.Stop();
+    }
+
+    private void OnFormShown(object sender, EventArgs e)
+    {
+        FetchOnce();
+    }
+
+    private void ConfigureRowTarget(Control c)
+    {
+        c.MouseDown += OnDragMouseDown;
+        c.MouseMove += OnDragMouseMove;
+        c.MouseUp += OnDragMouseUp;
+        c.ContextMenuStrip = _menu;
     }
 
     private void InstallKeyboardHook()
@@ -282,61 +295,50 @@ public sealed class WidgetForm : Form
 
     private void OnZTick(object sender, EventArgs e)
     {
-        ReloadConfigAndRebuild();
-
-        if (_winDToggle)
-        {
-            _winDToggle = false;
-            if (_hideOnWinD)
-            {
-                Hide();
-                return;
-            }
-        }
-
-        if (_hideOnWinD)
-        {
-            if (!Visible && !IsDesktopForeground())
-                Show();
-            return;
-        }
+        ConfigSnapshot snapshot = _config.Poll(DateTime.UtcNow);
+        if (snapshot.Changed) ApplySnapshot(snapshot, false);
 
         IntPtr fg = GetForegroundWindow();
-        string fgCls = GetClassNameOf(fg);
+        ForegroundKind kind = GetForegroundKind(fg);
+        bool lastAppExists = _lastAppFg != IntPtr.Zero && IsWindow(_lastAppFg);
+        bool lastAppVisible = lastAppExists && IsWindowVisible(_lastAppFg);
+        bool lastAppIconic = lastAppExists && IsIconic(_lastAppFg);
 
-        if (fgCls == "Shell_TrayWnd")
-            return;
+        var state = new DesktopState();
+        state.HideOnWinD = _hideOnWinD;
+        state.WinDToggled = _winDToggle;
+        state.WidgetVisible = Visible;
+        state.Foreground = kind;
+        state.LastAppExists = lastAppExists;
+        state.LastAppVisible = lastAppVisible;
+        state.LastAppIconic = lastAppIconic;
+        state.LastDesktopShown = _lastDesktopShown;
 
-        bool desktopFg = fgCls == "Progman" || fgCls == "WorkerW";
+        DesktopDecision decision = DesktopShowState.Decide(state);
+        if (decision.ClearWinDToggle) _winDToggle = false;
+        _lastDesktopShown = decision.LastDesktopShown;
+        if (kind == ForegroundKind.App && fg != IntPtr.Zero) _lastAppFg = fg;
 
-        if (!desktopFg)
+        switch (decision.Command)
         {
-            _lastAppFg = fg;
-            if (_lastDesktopShown)
-            {
-                _lastDesktopShown = false;
-                // 桌面退出：立即降回普通层并压到底，避免悬停在刚恢复的软件上
+            case DesktopCommand.Hide:
+                HideWidget();
+                break;
+            case DesktopCommand.Show:
+                ShowWidget();
+                break;
+            case DesktopCommand.SetTopMost:
+                if (!Visible) ShowWidget();
+                SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0,
+                    SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+                break;
+            case DesktopCommand.DropToBottom:
                 SetWindowPos(Handle, HWND_NOTOPMOST, 0, 0, 0, 0,
                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
                 SetWindowPos(Handle, HWND_BOTTOM, 0, 0, 0, 0,
                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
-            }
-            return;
+                break;
         }
-
-        if (_lastDesktopShown)
-            return;
-
-        // 只有前一个前台应用已不可见/最小化（Win+D 隐藏全部窗口）才算"显示桌面"，
-        // 单纯点击壁纸（应用仍可见）不置顶，避免压在应用窗口上
-        if (_lastAppFg != IntPtr.Zero && IsWindow(_lastAppFg)
-            && IsWindowVisible(_lastAppFg) && !IsIconic(_lastAppFg))
-            return;
-
-        _lastDesktopShown = true;
-        // Win11 显示桌面是 DWM 特殊层，普通 z-order 压不过，需保持 TOPMOST
-        SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0,
-            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
     }
 
     private void StartQuoteTimer(int intervalMs)
@@ -352,6 +354,8 @@ public sealed class WidgetForm : Form
 
     private void OnQuoteTick(object sender, EventArgs e)
     {
+        if (!Visible) return;
+
         var status = TradingClock.GetStatus(DateTime.Now);
         int want = TradingClock.GetIntervalMs(status);
         if (_quoteTimer.Interval != want)
@@ -387,41 +391,43 @@ public sealed class WidgetForm : Form
             {
                 BeginInvoke(new Action(() =>
                 {
-                    if (ok && raw != null)
+                    try
                     {
-                        var parsed = QuoteParser.Parse(raw);
-                        foreach (var kv in parsed) _quotes[kv.Key] = kv.Value;
+                        if (ok && raw != null)
+                        {
+                            var parsed = QuoteParser.Parse(raw);
+                            bool any = false;
+                            for (int i = 0; i < _codes.Count; i++)
+                            {
+                                if (parsed.ContainsKey(StockList.ToSymbol(_codes[i])))
+                                {
+                                    any = true;
+                                    break;
+                                }
+                            }
+                            foreach (var kv in parsed) _quotes[kv.Key] = kv.Value;
+                            _stale = !any;
+                        }
+                        else
+                        {
+                            _stale = true;
+                        }
+                        _rows.SetStale(_stale && _codes.Count > 0);
+                        _rows.Render(_quotes);
                     }
-                    RenderQuotes();
-                    _fetchBusy = false;
+                    catch
+                    {
+                        _stale = true;
+                        _rows.SetStale(_stale && _codes.Count > 0);
+                    }
+                    finally
+                    {
+                        _fetchBusy = false;
+                    }
                 }));
             }
             catch { _fetchBusy = false; }
         });
-    }
-
-    private void RenderQuotes()
-    {
-        for (int i = 0; i < _codes.Count && i < _rowNameLabels.Count; i++)
-        {
-            string code = _codes[i];
-            string symbol = StockList.ToSymbol(code);
-            Quote q;
-            if (_quotes.TryGetValue(symbol, out q))
-            {
-                _rowNameLabels[i].Text = q.Name;
-                _rowPctLabels[i].Text = QuoteParser.FormatPct(q.Pct);
-                _rowPctLabels[i].ForeColor =
-                    q.Pct > 0 ? ColorUp :
-                    q.Pct < 0 ? ColorDown : ColorFlat;
-            }
-            else
-            {
-                _rowNameLabels[i].Text = code;
-                _rowPctLabels[i].Text = "无数据";
-                _rowPctLabels[i].ForeColor = ColorFlat;
-            }
-        }
     }
 
     private static string GetClassNameOf(IntPtr hWnd)
@@ -432,31 +438,93 @@ public sealed class WidgetForm : Form
         return sb.ToString();
     }
 
-    private static bool IsDesktopForeground()
+    private static ForegroundKind GetForegroundKind(IntPtr hWnd)
     {
-        string cls = GetClassNameOf(GetForegroundWindow());
-        return cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd";
+        string cls = GetClassNameOf(hWnd);
+        if (cls == "Progman" || cls == "WorkerW") return ForegroundKind.Desktop;
+        if (cls == "Shell_TrayWnd") return ForegroundKind.Taskbar;
+        return ForegroundKind.App;
     }
 
-    private void OnFormMouseDown(object sender, MouseEventArgs e)
+    private void OnDragMouseDown(object sender, MouseEventArgs e)
     {
         if (e.Button != MouseButtons.Left) return;
+        Control c = sender as Control;
+        if (c == null) return;
         _dragging = true;
-        _dragStart = e.Location;
+        _dragStartScreen = c.PointToScreen(e.Location);
+        _formStart = Location;
+        c.Capture = true;
     }
 
-    private void OnFormMouseMove(object sender, MouseEventArgs e)
+    private void OnDragMouseMove(object sender, MouseEventArgs e)
     {
         if (!_dragging) return;
-        Location = new Point(Location.X + e.X - _dragStart.X, Location.Y + e.Y - _dragStart.Y);
+        Control c = sender as Control;
+        if (c == null) return;
+        Point screen = c.PointToScreen(e.Location);
+        Location = new Point(
+            _formStart.X + screen.X - _dragStartScreen.X,
+            _formStart.Y + screen.Y - _dragStartScreen.Y);
     }
 
-    private void OnFormMouseUp(object sender, MouseEventArgs e)
+    private void OnDragMouseUp(object sender, MouseEventArgs e)
     {
-        if (!_dragging) return;
+        if (e.Button != MouseButtons.Left || !_dragging) return;
         _dragging = false;
-        Location = PosConfig.Clamp(Location, Screen.PrimaryScreen.WorkingArea);
+        Control c = sender as Control;
+        if (c != null) c.Capture = false;
+        Rectangle area = GetCurrentScreenArea();
+        Location = PosConfig.Clamp(Location, area, Size);
         PosConfig.Save(PosConfig.DefaultPath, Location);
+    }
+
+    private Rectangle GetCurrentScreenArea()
+    {
+        Point center = new Point(Location.X + Width / 2, Location.Y + Height / 2);
+        return Screen.FromPoint(center).WorkingArea;
+    }
+
+    private void EnsureOnScreen()
+    {
+        Rectangle area = GetCurrentScreenArea();
+        Point clamped = PosConfig.Clamp(Location, area, Size);
+        if (clamped != Location) Location = clamped;
+    }
+
+    private void ApplySavedPosition()
+    {
+        Point saved = PosConfig.Load(PosConfig.DefaultPath);
+        if (saved == Point.Empty)
+        {
+            Rectangle area = Screen.PrimaryScreen.WorkingArea;
+            Location = new Point(
+                area.Right - Width - _metrics.DefaultMargin,
+                area.Top + _metrics.DefaultMargin);
+            Location = PosConfig.Clamp(Location, area, Size);
+        }
+        else
+        {
+            Point center = new Point(saved.X + Width / 2, saved.Y + Height / 2);
+            Rectangle area = Screen.FromPoint(center).WorkingArea;
+            Location = PosConfig.Clamp(saved, area, Size);
+        }
+    }
+
+    private void OnExitClick(object sender, EventArgs e)
+    {
+        Close();
+    }
+
+    private void OnFormClosing(object sender, FormClosingEventArgs e)
+    {
+        try
+        {
+            Rectangle area = GetCurrentScreenArea();
+            Location = PosConfig.Clamp(Location, area, Size);
+            PosConfig.Save(PosConfig.DefaultPath, Location);
+        }
+        catch { }
     }
 
     private void OnFormResize(object sender, EventArgs e)
@@ -466,7 +534,7 @@ public sealed class WidgetForm : Form
 
     private void ApplyRoundedRegion()
     {
-        int radius = 10;
+        int radius = _metrics.Radius;
         int w = Width, h = Height;
         if (w < radius * 2 || h < radius * 2) { Region = null; return; }
         using (var path = new System.Drawing.Drawing2D.GraphicsPath())
