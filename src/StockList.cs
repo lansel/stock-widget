@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
@@ -8,6 +9,9 @@ public class WidgetSettings
 {
     public List<string> Codes = new List<string>();
     public bool HideOnWinD = false;
+    public double Opacity = 0.92;
+    public Color BgColor = Color.FromArgb(32, 32, 36);
+    public Color NameColor = Color.WhiteSmoke;
 }
 
 public static class StockList
@@ -39,18 +43,60 @@ public static class StockList
         {
             string line = raw.Trim();
             if (line.Length == 0 || line.StartsWith("#")) continue;
-            if (line.StartsWith("hideOnWinD", StringComparison.OrdinalIgnoreCase))
+
+            int eq = line.IndexOf('=');
+            if (eq > 0)
             {
-                int eq = line.IndexOf('=');
-                if (eq > 0)
-                    s.HideOnWinD = line.Substring(eq + 1).Trim()
-                        .Equals("true", StringComparison.OrdinalIgnoreCase);
-                continue;
+                string key = line.Substring(0, eq).Trim();
+                string val = line.Substring(eq + 1).Trim();
+
+                if (key.Equals("hideOnWinD", StringComparison.OrdinalIgnoreCase))
+                {
+                    s.HideOnWinD = val.Equals("true", StringComparison.OrdinalIgnoreCase);
+                    continue;
+                }
+                if (key.Equals("opacity", StringComparison.OrdinalIgnoreCase))
+                {
+                    double v;
+                    if (double.TryParse(val, System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out v))
+                        s.Opacity = Math.Max(0.1, Math.Min(1.0, v));
+                    continue;
+                }
+                if (key.Equals("bgColor", StringComparison.OrdinalIgnoreCase))
+                {
+                    Color c;
+                    if (TryParseColor(val, out c)) s.BgColor = c;
+                    continue;
+                }
+                if (key.Equals("nameColor", StringComparison.OrdinalIgnoreCase))
+                {
+                    Color c;
+                    if (TryParseColor(val, out c)) s.NameColor = c;
+                    continue;
+                }
             }
+
             if (Regex.IsMatch(line, @"^\d{6}$") && seen.Add(line))
                 s.Codes.Add(line);
         }
         return s;
+    }
+
+    private static bool TryParseColor(string val, out Color color)
+    {
+        color = Color.Empty;
+        if (string.IsNullOrEmpty(val)) return false;
+        val = val.TrimStart('#');
+        if (val.Length == 3)
+            val = "" + val[0] + val[0] + val[1] + val[1] + val[2] + val[2];
+        if (val.Length != 6) return false;
+        int r, g, b;
+        if (!int.TryParse(val.Substring(0, 2), System.Globalization.NumberStyles.HexNumber, null, out r)) return false;
+        if (!int.TryParse(val.Substring(2, 2), System.Globalization.NumberStyles.HexNumber, null, out g)) return false;
+        if (!int.TryParse(val.Substring(4, 2), System.Globalization.NumberStyles.HexNumber, null, out b)) return false;
+        color = Color.FromArgb(r, g, b);
+        return true;
     }
 
     public static string ToSymbol(string code)

@@ -99,13 +99,10 @@ public sealed class WidgetForm : Form
     private bool _hideOnWinD;
 
     private readonly Font _rowFont = new Font("Microsoft YaHei UI", 10f);
-    private readonly Font _statusFont = new Font("Microsoft YaHei UI", 8f);
-    private readonly Label _statusLabel;
     private readonly List<Label> _rowNameLabels = new List<Label>();
     private readonly List<Label> _rowPctLabels = new List<Label>();
     private List<string> _codes = new List<string>();
     private Dictionary<string, Quote> _quotes = new Dictionary<string, Quote>();
-    private bool _networkError;
     private bool _fetchBusy;
     private Timer _quoteTimer;
     private Point _dragStart;
@@ -114,14 +111,10 @@ public sealed class WidgetForm : Form
     private static readonly Color ColorUp = Color.FromArgb(230, 70, 70);
     private static readonly Color ColorDown = Color.FromArgb(50, 190, 120);
     private static readonly Color ColorFlat = Color.Gray;
-    private static readonly Color ColorName = Color.WhiteSmoke;
-    private static readonly Color ColorStatus = Color.FromArgb(180, 180, 180);
-    private static readonly Color ColorError = Color.Orange;
 
     private const int RowHeight = 26;
     private const int MarginX = 12;
     private const int MarginY = 10;
-    private const int StatusOffsetY = 8;
 
     public WidgetForm(string configPath)
     {
@@ -133,7 +126,7 @@ public sealed class WidgetForm : Form
         StartPosition = FormStartPosition.Manual;
         BackColor = Color.FromArgb(32, 32, 36);
         Opacity = 0.92;
-        Size = new Size(190, 90);
+        Size = new Size(190, 60);
 
         Point saved = PosConfig.Load(PosConfig.DefaultPath);
         if (saved == Point.Empty)
@@ -146,14 +139,6 @@ public sealed class WidgetForm : Form
         {
             Location = PosConfig.Clamp(saved, Screen.PrimaryScreen.WorkingArea);
         }
-
-        _statusLabel = new Label();
-        _statusLabel.Font = _statusFont;
-        _statusLabel.ForeColor = ColorStatus;
-        _statusLabel.Location = new Point(MarginX, MarginY);
-        _statusLabel.AutoSize = true;
-        _statusLabel.Text = "";
-        Controls.Add(_statusLabel);
 
         MouseDown += OnFormMouseDown;
         MouseMove += OnFormMouseMove;
@@ -198,10 +183,11 @@ public sealed class WidgetForm : Form
             }
             if (_quoteTimer != null) _quoteTimer.Dispose();
             _rowFont.Dispose();
-            _statusFont.Dispose();
         }
         base.Dispose(disposing);
     }
+
+    private Color _nameColor = Color.WhiteSmoke;
 
     private void ReloadConfigAndRebuild()
     {
@@ -211,6 +197,9 @@ public sealed class WidgetForm : Form
             {
                 var settings = StockList.ParseWidgetSettings(File.ReadAllText(_configPath));
                 _hideOnWinD = settings.HideOnWinD;
+                Opacity = settings.Opacity;
+                BackColor = settings.BgColor;
+                _nameColor = settings.NameColor;
                 bool changed = !SameCodes(_codes, settings.Codes);
                 _codes = settings.Codes;
                 if (changed) RebuildRows();
@@ -247,7 +236,7 @@ public sealed class WidgetForm : Form
         {
             var name = new Label();
             name.Font = _rowFont;
-            name.ForeColor = ColorName;
+            name.ForeColor = _nameColor;
             name.AutoSize = true;
             name.Text = _codes[i];
             Controls.Add(name);
@@ -274,10 +263,9 @@ public sealed class WidgetForm : Form
             _rowPctLabels[i].Location = new Point(MarginX + 96, y);
             y += RowHeight;
         }
-        _statusLabel.Location = new Point(MarginX, y + StatusOffsetY);
 
-        int h = y + StatusOffsetY + 16 + MarginY;
-        if (h < 70) h = 70;
+        int h = y + MarginY;
+        if (h < 50) h = 50;
         Size = new Size(Width, h);
     }
 
@@ -364,7 +352,6 @@ public sealed class WidgetForm : Form
     {
         if (_fetchBusy || _codes.Count == 0)
         {
-            UpdateStatusLabel();
             return;
         }
         _fetchBusy = true;
@@ -392,14 +379,8 @@ public sealed class WidgetForm : Form
                     {
                         var parsed = QuoteParser.Parse(raw);
                         foreach (var kv in parsed) _quotes[kv.Key] = kv.Value;
-                        _networkError = false;
-                    }
-                    else
-                    {
-                        _networkError = true;
                     }
                     RenderQuotes();
-                    UpdateStatusLabel();
                     _fetchBusy = false;
                 }));
             }
@@ -428,15 +409,6 @@ public sealed class WidgetForm : Form
                 _rowPctLabels[i].ForeColor = ColorFlat;
             }
         }
-    }
-
-    private void UpdateStatusLabel()
-    {
-        var status = TradingClock.GetStatus(DateTime.Now);
-        string text = TradingClock.GetLabel(status);
-        if (_networkError) text += " · 网络异常";
-        _statusLabel.Text = text;
-        _statusLabel.ForeColor = _networkError ? ColorError : ColorStatus;
     }
 
     private void BringToTopNonTopMost()

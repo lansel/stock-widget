@@ -3,6 +3,15 @@
 000001
 300750
 
-# 配置项：hideOnWinD=true 时按 Win+D 隐藏挂件，打开任意软件自动恢复
-# 默认 false：Win+D 时挂件显示在最前
+# 配置项
+# hideOnWinD=true 时按 Win+D 隐藏挂件，打开任意软件自动恢复（默认 false）
 hideOnWinD=false
+
+# 透明度 0.1~1.0（默认 0.92）
+opacity=0.92
+
+# 背景色 十六进制 RGB（默认 #202024）
+bgColor=#202024
+
+# 股票名称文字色（默认 #F5F5F5）
+nameColor=#F5F5F5
