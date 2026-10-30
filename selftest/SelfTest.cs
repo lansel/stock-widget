@@ -53,6 +53,31 @@ static class SelfTest
             Assert(QuoteParser.FormatPct(0) == "0.00%");
             Assert(QuoteParser.FormatPct(2.5) == "+2.50%");
         });
+        fail += Run("TradingClock boundaries", () => {
+            var sat = new DateTime(2026, 10, 31, 10, 0, 0);
+            var mon = new DateTime(2026, 11, 2, 0, 0, 0);
+            Assert(TradingClock.GetStatus(sat) == MarketStatus.Weekend);
+            Assert(TradingClock.GetStatus(mon.AddHours(8)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(mon.AddHours(9).AddMinutes(29)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(mon.AddHours(9).AddMinutes(30)) == MarketStatus.Open);
+            Assert(TradingClock.GetStatus(mon.AddHours(11).AddMinutes(29)) == MarketStatus.Open);
+            Assert(TradingClock.GetStatus(mon.AddHours(11).AddMinutes(30)) == MarketStatus.Lunch);
+            Assert(TradingClock.GetStatus(mon.AddHours(12).AddMinutes(59)) == MarketStatus.Lunch);
+            Assert(TradingClock.GetStatus(mon.AddHours(13)) == MarketStatus.Open);
+            Assert(TradingClock.GetStatus(mon.AddHours(14).AddMinutes(59)) == MarketStatus.Open);
+            Assert(TradingClock.GetStatus(mon.AddHours(15)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(mon.AddHours(16)) == MarketStatus.Closed);
+        });
+        fail += Run("TradingClock interval and label", () => {
+            Assert(TradingClock.GetIntervalMs(MarketStatus.Open) == 3000);
+            Assert(TradingClock.GetIntervalMs(MarketStatus.Lunch) == 60000);
+            Assert(TradingClock.GetIntervalMs(MarketStatus.Closed) == 60000);
+            Assert(TradingClock.GetIntervalMs(MarketStatus.Weekend) == 60000);
+            Assert(TradingClock.GetLabel(MarketStatus.Open) == "\u5f00\u76d8\u4e2d");
+            Assert(TradingClock.GetLabel(MarketStatus.Lunch) == "\u5348\u4f11");
+            Assert(TradingClock.GetLabel(MarketStatus.Closed) == "\u5df2\u6536\u76d8");
+            Assert(TradingClock.GetLabel(MarketStatus.Weekend) == "\u5468\u672b");
+        });
         Console.WriteLine(fail == 0 ? "ALL PASS" : fail + " FAILED");
         return fail == 0 ? 0 : 1;
     }
