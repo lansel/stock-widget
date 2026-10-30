@@ -1,0 +1,23 @@
+name: build
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and run selftests
+        shell: pwsh
+        run: ./build.ps1
+
+      - name: Upload widget exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: StockWidget
+          path: bin/StockWidget.exe

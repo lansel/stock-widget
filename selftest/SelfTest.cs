@@ -44,6 +44,17 @@ static class SelfTest
             Assert(StockList.ToSymbol("399001") == "sz399001");
             Assert(StockList.ToSymbol("399006") == "sz399006");
         });
+        fail += Run("StockList.ToSymbol etf and lof", () => {
+            Assert(StockList.ToSymbol("510300") == "sh510300");
+            Assert(StockList.ToSymbol("513100") == "sh513100");
+            Assert(StockList.ToSymbol("588000") == "sh588000");
+            Assert(StockList.ToSymbol("159915") == "sz159915");
+            Assert(StockList.ToSymbol("161725") == "sz161725");
+        });
+        fail += Run("StockList.ToSymbol empty input", () => {
+            Assert(StockList.ToSymbol("") == "");
+            Assert(StockList.ToSymbol("   ") == "");
+        });
         fail += Run("StockList.GetConfigPath on desktop", () => {
             Assert(StockList.GetConfigPath().EndsWith("stocks.txt"));
         });
@@ -224,11 +235,12 @@ static class SelfTest
         });
         fail += Run("StockList inline comments", () => {
             var s = StockList.ParseWidgetSettings(
-                "600519 # x\n000001#y\nhideOnWinD=true # z\nopacity=0.9 # dim\nbgColor=#202024\n");
+                "600519 # x\n000001#y\nhideOnWinD=true # z\nopacity=0.9 # dim\nbgColor=#202024\nnameColor=#F5F5F5 # 白色\nnameColor=#00FF00#紧贴\n");
             Assert(s.Codes.Count == 2 && s.Codes[0] == "600519" && s.Codes[1] == "000001");
             Assert(s.HideOnWinD);
             Assert(Math.Abs(s.Opacity - 0.9) < 0.0001);
             Assert(s.BgColor.R == 0x20 && s.BgColor.G == 0x20 && s.BgColor.B == 0x24);
+            Assert(s.NameColor.R == 0x00 && s.NameColor.G == 0xFF && s.NameColor.B == 0x00);
         });
         fail += Run("TradingClock boundaries", () => {
             var sat = new DateTime(2026, 10, 31, 10, 0, 0);

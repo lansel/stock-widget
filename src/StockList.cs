@@ -83,7 +83,14 @@ public static class StockList
         if (eq > 0)
         {
             string value = line.Substring(eq + 1).TrimStart();
-            if (value.StartsWith("#")) return line;
+            if (value.StartsWith("#"))
+            {
+                // 颜色值本身以 # 开头：值内第二个 # 起才是行内注释
+                int comment = value.IndexOf('#', 1);
+                if (comment > 0)
+                    return (line.Substring(0, eq + 1) + value.Substring(0, comment)).TrimEnd();
+                return line;
+            }
         }
         return line.Substring(0, hash).TrimEnd();
     }
@@ -121,6 +128,7 @@ public static class StockList
     public static string ToSymbol(string code)
     {
         code = code.Trim();
+        if (code.Length == 0) return "";
         // 已带 sh/sz/bj 前缀的直接返回（小写）
         if (Regex.IsMatch(code, @"^(sh|sz|bj)\d{6}$", RegexOptions.IgnoreCase))
             return code.ToLower();
@@ -131,6 +139,10 @@ public static class StockList
         // 指数代码：1A0001 → sh000001
         if (Regex.IsMatch(code, @"^1A\d{4}$", RegexOptions.IgnoreCase))
             return "sh00" + code.Substring(2);
+        // 基金（ETF/LOF）：沪 50/51/56/58，深 15/16
+        string p2 = code.Substring(0, 2);
+        if (p2 == "50" || p2 == "51" || p2 == "56" || p2 == "58") return "sh" + code;
+        if (p2 == "15" || p2 == "16") return "sz" + code;
         if (code.StartsWith("92")) return "bj" + code;
         char c = code[0];
         if (c == '6' || c == '9') return "sh" + code;

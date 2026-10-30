@@ -536,7 +536,7 @@ public sealed class WidgetForm : Form
     {
         int radius = _metrics.Radius;
         int w = Width, h = Height;
-        if (w < radius * 2 || h < radius * 2) { Region = null; return; }
+        if (w < radius * 2 || h < radius * 2) { ReplaceRegion(null); return; }
         using (var path = new System.Drawing.Drawing2D.GraphicsPath())
         {
             path.AddArc(0, 0, radius * 2, radius * 2, 180, 90);
@@ -544,7 +544,15 @@ public sealed class WidgetForm : Form
             path.AddArc(w - radius * 2, h - radius * 2, radius * 2, radius * 2, 0, 90);
             path.AddArc(0, h - radius * 2, radius * 2, radius * 2, 90, 90);
             path.CloseFigure();
-            Region = new Region(path);
+            ReplaceRegion(new Region(path));
         }
+    }
+
+    // Control.Region 的 setter 不释放旧 Region，换新前手动释放，避免 GDI 句柄泄漏
+    private void ReplaceRegion(Region region)
+    {
+        Region old = Region;
+        Region = region;
+        if (old != null) old.Dispose();
     }
 }
