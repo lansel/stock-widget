@@ -185,7 +185,7 @@ public sealed class WidgetForm : Form
         BackColor = settings.BgColor;
         _rows.SetNameColor(settings.NameColor);
 
-        bool rebuilt = _rows.SetCodes(settings.Codes, snapshot.Exists);
+        bool rebuilt = _rows.SetCodes(settings.Codes, settings.Aliases, settings.ShowPrice, snapshot.Exists);
         if (rebuilt)
         {
             _codes = new List<string>(settings.Codes);

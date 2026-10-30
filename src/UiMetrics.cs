@@ -9,6 +9,7 @@ public sealed class UiMetrics
     public readonly int MarginX;
     public readonly int MarginY;
     public readonly int NameColumnWidth;
+    public readonly int PriceColumnWidth;
     public readonly int PctColumnWidth;
     public readonly int Radius;
     public readonly int MinHeight;
@@ -23,6 +24,7 @@ public sealed class UiMetrics
         MarginY = Round(10 * scale);
         RowHeight = Round(26 * scale);
         NameColumnWidth = Round(96 * scale);
+        PriceColumnWidth = Round(56 * scale);
         PctColumnWidth = Round(70 * scale);
         Radius = Round(10 * scale);
         MinHeight = Round(50 * scale);
