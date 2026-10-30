@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
+using System.IO;
 using System.Text;
 
 static class SelfTest
@@ -52,6 +54,21 @@ static class SelfTest
         fail += Run("StockList.ResolveConfigPath with --config", () => {
             var args = new[] { "--config", @"E:\test\stocks.txt" };
             Assert(StockList.ResolveConfigPath(args) == @"E:\test\stocks.txt");
+        });
+        fail += Run("PosConfig save load roundtrip", () => {
+            string p = Path.Combine(Path.GetTempPath(), "pos_test.ini");
+            PosConfig.Save(p, new Point(123, 456));
+            Point r = PosConfig.Load(p);
+            Assert(r.X == 123 && r.Y == 456);
+            Assert(PosConfig.Load(Path.Combine(Path.GetTempPath(), "no_such_pos.ini")) == Point.Empty);
+            File.Delete(p);
+        });
+        fail += Run("PosConfig.Clamp", () => {
+            var area = new Rectangle(0, 0, 1920, 1040);
+            Assert(PosConfig.Clamp(new Point(-50, 10), area) == new Point(0, 10));
+            Assert(PosConfig.Clamp(new Point(10, -5), area) == new Point(10, 0));
+            Assert(PosConfig.Clamp(new Point(5000, 5000), area) == new Point(1919, 1039));
+            Assert(PosConfig.Clamp(new Point(100, 100), area) == new Point(100, 100));
         });
         fail += Run("QuoteParser.Parse multi entry", () => {
             string text = TEntry("sh600519", "600519", "\u8d35\u5dde\u8305\u53f0", "1369.04", "1.11")

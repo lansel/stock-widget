@@ -108,6 +108,8 @@ public sealed class WidgetForm : Form
     private bool _networkError;
     private bool _fetchBusy;
     private Timer _quoteTimer;
+    private Point _dragStart;
+    private bool _dragging;
 
     private static readonly Color ColorUp = Color.FromArgb(230, 70, 70);
     private static readonly Color ColorDown = Color.FromArgb(50, 190, 120);
@@ -130,10 +132,20 @@ public sealed class WidgetForm : Form
         TopMost = false;
         StartPosition = FormStartPosition.Manual;
         BackColor = Color.FromArgb(32, 32, 36);
+        Opacity = 0.92;
         Size = new Size(190, 90);
-        Location = new Point(
-            Screen.PrimaryScreen.WorkingArea.Right - Width - 24,
-            Screen.PrimaryScreen.WorkingArea.Top + 24);
+
+        Point saved = PosConfig.Load(PosConfig.DefaultPath);
+        if (saved == Point.Empty)
+        {
+            Location = new Point(
+                Screen.PrimaryScreen.WorkingArea.Right - Width - 24,
+                Screen.PrimaryScreen.WorkingArea.Top + 24);
+        }
+        else
+        {
+            Location = PosConfig.Clamp(saved, Screen.PrimaryScreen.WorkingArea);
+        }
 
         _statusLabel = new Label();
         _statusLabel.Font = _statusFont;
@@ -142,6 +154,11 @@ public sealed class WidgetForm : Form
         _statusLabel.AutoSize = true;
         _statusLabel.Text = "";
         Controls.Add(_statusLabel);
+
+        MouseDown += OnFormMouseDown;
+        MouseMove += OnFormMouseMove;
+        MouseUp += OnFormMouseUp;
+        Resize += OnFormResize;
 
         _zTick = new Timer();
         _zTick.Interval = 250;
@@ -152,6 +169,7 @@ public sealed class WidgetForm : Form
         InstallKeyboardHook();
         StartQuoteTimer(TradingClock.GetIntervalMs(TradingClock.GetStatus(DateTime.Now)));
         FetchOnce();
+        ApplyRoundedRegion();
     }
 
     protected override CreateParams CreateParams
@@ -437,5 +455,47 @@ public sealed class WidgetForm : Form
         GetClassName(fg, sb, 256);
         string cls = sb.ToString();
         return cls == "Progman" || cls == "WorkerW" || cls == "Shell_TrayWnd";
+    }
+
+    private void OnFormMouseDown(object sender, MouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Left) return;
+        _dragging = true;
+        _dragStart = e.Location;
+    }
+
+    private void OnFormMouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_dragging) return;
+        Location = new Point(Location.X + e.X - _dragStart.X, Location.Y + e.Y - _dragStart.Y);
+    }
+
+    private void OnFormMouseUp(object sender, MouseEventArgs e)
+    {
+        if (!_dragging) return;
+        _dragging = false;
+        Location = PosConfig.Clamp(Location, Screen.PrimaryScreen.WorkingArea);
+        PosConfig.Save(PosConfig.DefaultPath, Location);
+    }
+
+    private void OnFormResize(object sender, EventArgs e)
+    {
+        ApplyRoundedRegion();
+    }
+
+    private void ApplyRoundedRegion()
+    {
+        int radius = 10;
+        int w = Width, h = Height;
+        if (w < radius * 2 || h < radius * 2) { Region = null; return; }
+        using (var path = new System.Drawing.Drawing2D.GraphicsPath())
+        {
+            path.AddArc(0, 0, radius * 2, radius * 2, 180, 90);
+            path.AddArc(w - radius * 2, 0, radius * 2, radius * 2, 270, 90);
+            path.AddArc(w - radius * 2, h - radius * 2, radius * 2, radius * 2, 0, 90);
+            path.AddArc(0, h - radius * 2, radius * 2, radius * 2, 90, 90);
+            path.CloseFigure();
+            Region = new Region(path);
+        }
     }
 }
