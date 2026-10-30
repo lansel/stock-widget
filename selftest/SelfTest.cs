@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 static class SelfTest
 {
@@ -77,6 +78,14 @@ static class SelfTest
             Assert(TradingClock.GetLabel(MarketStatus.Lunch) == "\u5348\u4f11");
             Assert(TradingClock.GetLabel(MarketStatus.Closed) == "\u5df2\u6536\u76d8");
             Assert(TradingClock.GetLabel(MarketStatus.Weekend) == "\u5468\u672b");
+        });
+        fail += Run("QuoteClient.BuildUrl", () => {
+            Assert(QuoteClient.BuildUrl(new[] { "sh600519", "sz000001" }) == "https://qt.gtimg.cn/q=sh600519,sz000001");
+        });
+        fail += Run("QuoteClient.DecodeGbk roundtrip", () => {
+            string s = "\u8d35\u5dde\u8305\u53f0";
+            byte[] bytes = Encoding.GetEncoding(936).GetBytes(s);
+            Assert(QuoteClient.DecodeGbk(bytes) == s);
         });
         Console.WriteLine(fail == 0 ? "ALL PASS" : fail + " FAILED");
         return fail == 0 ? 0 : 1;
