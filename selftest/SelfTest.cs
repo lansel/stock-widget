@@ -95,6 +95,12 @@ static class SelfTest
             Assert(StockList.ParseWidgetSettings("showPrice=true\n600519\n").ShowPrice);
             Assert(!StockList.ParseWidgetSettings("showPrice=yes\n").ShowPrice);
         });
+        fail += Run("StockList.ParseWidgetSettings pauseWhenAway", () => {
+            Assert(StockList.ParseWidgetSettings("600519\n").PauseWhenAway);
+            Assert(!StockList.ParseWidgetSettings("pauseWhenAway=false\n").PauseWhenAway);
+            Assert(StockList.ParseWidgetSettings("pauseWhenAway=true\n").PauseWhenAway);
+            Assert(StockList.ParseWidgetSettings("pauseWhenAway=yes\n").PauseWhenAway);
+        });
         fail += Run("StockList.LoadSettingsOrDefault", () => {
             var d = StockList.LoadSettingsOrDefault(@"E:\no_such_dir\stocks.txt");
             Assert(d.Autostart && d.Codes.Count == 0);
@@ -235,6 +241,35 @@ static class SelfTest
             var d = DesktopShowState.Decide(DS(false, true, true, ForegroundKind.App, false, false, false, false));
             Assert(d.Command == DesktopCommand.None && d.ClearWinDToggle);
         });
+        fail += Run("PollPolicy default foreground gating", () => {
+            Assert(PollPolicy.ShouldPoll(true, true, false, true, ForegroundKind.Desktop, 0));
+            Assert(PollPolicy.ShouldPoll(true, true, false, true, ForegroundKind.Taskbar, 0));
+            Assert(!PollPolicy.ShouldPoll(true, true, false, true, ForegroundKind.App, 0));
+            Assert(!PollPolicy.ShouldPoll(true, true, false, false, ForegroundKind.Desktop, 0));
+        });
+        fail += Run("PollPolicy hidden widget", () => {
+            Assert(!PollPolicy.ShouldPoll(false, true, false, true, ForegroundKind.Desktop, 0));
+            Assert(!PollPolicy.ShouldPoll(false, true, true, true, ForegroundKind.App, 0));
+        });
+        fail += Run("PollPolicy idle boundary", () => {
+            Assert(PollPolicy.ShouldPoll(true, true, false, true, ForegroundKind.Desktop, PollPolicy.IdleThresholdMs - 1));
+            Assert(!PollPolicy.ShouldPoll(true, true, false, true, ForegroundKind.Desktop, PollPolicy.IdleThresholdMs));
+        });
+        fail += Run("PollPolicy hideOnWinD visible over app", () => {
+            Assert(PollPolicy.ShouldPoll(true, true, true, true, ForegroundKind.App, 0));
+            Assert(!PollPolicy.ShouldPoll(true, true, true, false, ForegroundKind.App, 0));
+            Assert(!PollPolicy.ShouldPoll(true, true, true, true, ForegroundKind.App, PollPolicy.IdleThresholdMs));
+        });
+        fail += Run("PollPolicy legacy mode always polls when visible", () => {
+            Assert(PollPolicy.ShouldPoll(true, false, false, true, ForegroundKind.App, 0));
+            Assert(PollPolicy.ShouldPoll(true, false, false, false, ForegroundKind.Desktop, 0));
+            Assert(PollPolicy.ShouldPoll(true, false, false, true, ForegroundKind.App, PollPolicy.IdleThresholdMs));
+            Assert(!PollPolicy.ShouldPoll(false, false, false, true, ForegroundKind.App, 0));
+        });
+        fail += Run("PollPolicy idle ticks wrap", () => {
+            Assert(PollPolicy.GetIdleMs(1000u, 1500u) == 500u);
+            Assert(PollPolicy.GetIdleMs(uint.MaxValue - 100u, 100u) == 201u);
+        });
         fail += Run("QuoteParser.Parse multi entry", () => {
             string text = TEntry("sh600519", "600519", "\u8d35\u5dde\u8305\u53f0", "1369.04", "1.11")
                 + ";\n" + TEntry("sz000001", "000001", "\u5e73\u5b89\u94f6\u884c", "11.47", "-0.61")
@@ -307,8 +342,30 @@ static class SelfTest
             Assert(TradingClock.GetStatus(new DateTime(2026, 2, 14, 10, 0, 0)) == MarketStatus.Weekend);
             Assert(TradingClock.GetStatus(new DateTime(2026, 2, 28, 10, 0, 0)) == MarketStatus.Weekend);
         });
-        fail += Run("TradingClock 2027 degrades gracefully", () => {
-            Assert(TradingClock.GetStatus(new DateTime(2027, 1, 1, 10, 0, 0)) == MarketStatus.Open);
+        fail += Run("TradingClock holidays 2027", () => {
+            Assert(TradingClock.GetStatus(new DateTime(2027, 1, 1, 10, 0, 0)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(new DateTime(2027, 2, 5, 10, 0, 0)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(new DateTime(2027, 2, 8, 10, 0, 0)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(new DateTime(2027, 2, 12, 10, 0, 0)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(new DateTime(2027, 4, 5, 10, 0, 0)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(new DateTime(2027, 4, 30, 10, 0, 0)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(new DateTime(2027, 5, 3, 10, 0, 0)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(new DateTime(2027, 5, 4, 10, 0, 0)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(new DateTime(2027, 6, 9, 10, 0, 0)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(new DateTime(2027, 9, 15, 10, 0, 0)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(new DateTime(2027, 10, 1, 10, 0, 0)) == MarketStatus.Closed);
+            Assert(TradingClock.GetStatus(new DateTime(2027, 10, 7, 10, 0, 0)) == MarketStatus.Closed);
+        });
+        fail += Run("TradingClock 2027 holiday edges", () => {
+            Assert(TradingClock.GetStatus(new DateTime(2027, 1, 4, 10, 0, 0)) == MarketStatus.Open);
+            Assert(TradingClock.GetStatus(new DateTime(2027, 2, 15, 10, 0, 0)) == MarketStatus.Open);
+            Assert(TradingClock.GetStatus(new DateTime(2027, 5, 5, 10, 0, 0)) == MarketStatus.Open);
+            Assert(TradingClock.GetStatus(new DateTime(2027, 10, 8, 10, 0, 0)) == MarketStatus.Open);
+            Assert(TradingClock.IsNonTradingDay(new DateTime(2027, 2, 5, 9, 0, 0)));
+            Assert(!TradingClock.IsNonTradingDay(new DateTime(2027, 2, 15, 10, 0, 0)));
+        });
+        fail += Run("TradingClock 2028 degrades gracefully", () => {
+            Assert(TradingClock.GetStatus(new DateTime(2028, 1, 3, 10, 0, 0)) == MarketStatus.Open);
         });
         fail += Run("TradingClock.IsNonTradingDay", () => {
             Assert(TradingClock.IsNonTradingDay(new DateTime(2026, 10, 31, 9, 0, 0)));
@@ -317,7 +374,8 @@ static class SelfTest
             Assert(TradingClock.IsNonTradingDay(new DateTime(2026, 2, 14, 10, 0, 0)));
             Assert(!TradingClock.IsNonTradingDay(new DateTime(2026, 9, 30, 10, 0, 0)));
             Assert(!TradingClock.IsNonTradingDay(new DateTime(2026, 12, 31, 14, 0, 0)));
-            Assert(!TradingClock.IsNonTradingDay(new DateTime(2027, 1, 1, 10, 0, 0)));
+            Assert(TradingClock.IsNonTradingDay(new DateTime(2027, 1, 1, 10, 0, 0)));
+            Assert(!TradingClock.IsNonTradingDay(new DateTime(2028, 1, 3, 10, 0, 0)));
         });
         fail += Run("TradingClock interval and label", () => {
             Assert(TradingClock.GetIntervalMs(MarketStatus.Open) == 3000);
@@ -336,6 +394,222 @@ static class SelfTest
             string s = "\u8d35\u5dde\u8305\u53f0";
             byte[] bytes = Encoding.GetEncoding(936).GetBytes(s);
             Assert(QuoteClient.DecodeGbk(bytes) == s);
+        });
+        fail += Run("ChartClient.BuildKlineUrl", () => {
+            Assert(ChartClient.BuildKlineUrl("sh600519", "week", 120)
+                == "https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh600519,week,,,120,qfq");
+            Assert(ChartClient.BuildKlineUrl("sh000001", "month", 120)
+                == "https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh000001,month,,,120,qfq");
+            Assert(ChartClient.BuildDailyUrl("sz159915", 120)
+                == "https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=sz159915,day,,,120,qfq");
+        });
+        fail += Run("ChartParser.TimeToMinuteIndex", () => {
+            Assert(ChartParser.TimeToMinuteIndex("0930") == 0);
+            Assert(ChartParser.TimeToMinuteIndex("0931") == 1);
+            Assert(ChartParser.TimeToMinuteIndex("1130") == 120);
+            Assert(ChartParser.TimeToMinuteIndex("1300") == 120);
+            Assert(ChartParser.TimeToMinuteIndex("1301") == 121);
+            Assert(ChartParser.TimeToMinuteIndex("1500") == 240);
+            Assert(ChartParser.TimeToMinuteIndex("0929") == -1);
+            Assert(ChartParser.TimeToMinuteIndex("1131") == -1);
+            Assert(ChartParser.TimeToMinuteIndex("1501") == -1);
+            Assert(ChartParser.TimeToMinuteIndex("") == -1);
+        });
+        fail += Run("ChartParser.ParseMinute stock", () => {
+            string json = "{\"code\":0,\"data\":{\"sh600519\":{\"data\":{\"data\":[\"0930 1440.06 186 26785115.56\",\"0931 1440.99 1110 159723413.00\",\"0932 1444.51 1389 199953471.00\"],\"date\":\"20261109\"},\"qt\":{\"sh600519\":[\"1\",\"\u8d35\u5dde\u8305\u53f0\",\"600519\",\"1443.58\",\"1453.00\"]}}}}";
+            MinuteSeries s = ChartParser.ParseMinute("sh600519", json);
+            Assert(s.Points.Count == 3);
+            Assert(s.HasAvg);
+            Assert(s.Date == "20261109");
+            Assert(s.Quote != null && s.Quote.PrevClose == 1453.00);
+            Assert(s.Quote.Name == "\u8d35\u5dde\u8305\u53f0");
+            Assert(Math.Abs(s.Quote.Price - 1443.58) < 1e-9);
+            Assert(s.Points[0].MinuteIndex == 0);
+            Assert(s.Points[1].MinuteIndex == 1);
+            Assert(Math.Abs(s.Points[0].Avg - 1440.06) < 0.001);
+            Assert(Math.Abs(s.Points[1].Avg - 159723413.00 / 111000.0) < 0.001);
+        });
+        fail += Run("ChartParser.ParseMinute index has no avg", () => {
+            string json = "{\"data\":{\"sh000001\":{\"data\":{\"data\":[\"0930 3659.02 4291331 5711010174.80\"],\"date\":\"20261109\"},\"qt\":{\"sh000001\":[\"1\",\"\u4e0a\u8bc1\u6307\u6570\",\"000001\",\"3659.02\",\"3650.00\"]}}}}";
+            MinuteSeries s = ChartParser.ParseMinute("sh000001", json);
+            Assert(!s.HasAvg);
+            Assert(s.Points.Count == 1);
+        });
+        fail += Run("ChartParser.ParseMinute zero volume and empty", () => {
+            string json = "{\"data\":{\"sz000001\":{\"data\":{\"data\":[\"0930 10.00 0 0\"],\"date\":\"20261109\"},\"qt\":{\"sz000001\":[\"1\",\"\u5e73\u5b89\u94f6\u884c\",\"000001\",\"10.00\",\"9.90\"]}}}}";
+            MinuteSeries s = ChartParser.ParseMinute("sz000001", json);
+            Assert(s.Points.Count == 1 && Math.Abs(s.Points[0].Avg - 10.00) < 1e-9);
+            Assert(ChartParser.ParseMinute("sh600519", "").Points.Count == 0);
+            Assert(ChartParser.ParseMinute("sh600519", "not json").Points.Count == 0);
+        });
+        fail += Run("ChartParser.ParseDaily qfqday", () => {
+            string json = "{\"code\":0,\"data\":{\"sh600519\":{\"qfqday\":[[\"2026-11-06\",\"1450.000\",\"1453.000\",\"1457.720\",\"1436.000\",\"42848.000\"],[\"2026-11-09\",\"1440.060\",\"1443.580\",\"1449.990\",\"1435.080\",\"16001\"]],\"qt\":{\"sh600519\":[\"1\",\"\u8d35\u5dde\u8305\u53f0\",\"600519\",\"1443.58\",\"1453.00\"]}}}}";
+            DailySeries s = ChartParser.ParseDaily("sh600519", json);
+            Assert(s.Bars.Count == 2);
+            Assert(s.Bars[0].Date == "2026-11-06");
+            Assert(Math.Abs(s.Bars[1].Open - 1440.06) < 1e-9);
+            Assert(Math.Abs(s.Bars[1].Close - 1443.58) < 1e-9);
+            Assert(Math.Abs(s.Bars[1].High - 1449.99) < 1e-9);
+            Assert(Math.Abs(s.Bars[1].Low - 1435.08) < 1e-9);
+            Assert(Math.Abs(s.Bars[1].Volume - 16001) < 1e-9);
+        });
+        fail += Run("ChartParser.ParseDaily day fallback and bad rows", () => {
+            string json = "{\"data\":{\"sh000001\":{\"day\":[[\"2026-11-06\",\"3612.150\",\"3649.180\",\"3660.490\",\"3610.200\",\"565372836.000\"],[\"bad\"],[\"2026-11-07\",\"\",\"1\",\"1\",\"1\",\"1\"]],\"qt\":{\"sh000001\":[\"1\",\"\u4e0a\u8bc1\u6307\u6570\",\"000001\",\"3649.18\",\"3612.15\"]}}}}";
+            DailySeries s = ChartParser.ParseDaily("sh000001", json);
+            Assert(s.Bars.Count == 1);
+            Assert(Math.Abs(s.Bars[0].Close - 3649.18) < 1e-9);
+            Assert(ChartParser.ParseDaily("sh600519", "").Bars.Count == 0);
+        });
+        fail += Run("ChartParser.ParseKline weekly and monthly", () => {
+            string weekJson = "{\"data\":{\"sh600519\":{\"qfqweek\":[[\"2026-10-30\",\"1325.400\",\"1392.050\",\"1393.370\",\"1322.600\",\"221992.000\"],[\"2026-11-06\",\"1410.000\",\"1453.000\",\"1480.600\",\"1395.020\",\"311806.000\"]],\"qt\":{\"sh600519\":[\"1\",\"Moutai\",\"600519\",\"1453.00\",\"1444.99\"]}}}}";
+            DailySeries w = ChartParser.ParseKline("sh600519", weekJson, "week");
+            Assert(w.Bars.Count == 2);
+            Assert(w.Bars[1].Date == "2026-11-06");
+            Assert(Math.Abs(w.Bars[1].Close - 1453) < 1e-9);
+            Assert(Math.Abs(w.Bars[1].Volume - 311806) < 1e-9);
+            string monthJson = "{\"data\":{\"sz159915\":{\"qfqmonth\":[[\"2026-10-30\",\"3.161\",\"2.435\",\"3.188\",\"2.433\",\"638695953.000\"]],\"qt\":{\"sz159915\":[\"51\",\"ETF\",\"159915\",\"2.51\",\"2.48\"]}}}}";
+            DailySeries m = ChartParser.ParseKline("sz159915", monthJson, "month");
+            Assert(m.Bars.Count == 1 && Math.Abs(m.Bars[0].Low - 2.433) < 1e-9);
+        });
+        fail += Run("ChartParser.ParseKline index fallback", () => {
+            string weekJson = "{\"data\":{\"sh000001\":{\"week\":[[\"2026-11-06\",\"3614.310\",\"3649.180\",\"3701.590\",\"3580.380\",\"2749949803.000\"]],\"qt\":{\"sh000001\":[\"1\",\"Index\",\"000001\",\"3649.18\",\"3612.15\"]}}}}";
+            DailySeries w = ChartParser.ParseKline("sh000001", weekJson, "week");
+            Assert(w.Bars.Count == 1 && Math.Abs(w.Bars[0].Close - 3649.18) < 1e-9);
+            string monthJson = "{\"data\":{\"sh000001\":{\"month\":[[\"2026-10-30\",\"3838.980\",\"3599.020\",\"3864.120\",\"3574.270\",\"7811914734.000\"]],\"qt\":{\"sh000001\":[\"1\",\"Index\",\"000001\",\"3599.02\",\"3612.15\"]}}}}";
+            DailySeries m = ChartParser.ParseKline("sh000001", monthJson, "month");
+            Assert(m.Bars.Count == 1 && Math.Abs(m.Bars[0].Low - 3574.27) < 1e-9);
+        });
+        fail += Run("ChartParser.IsIndexSymbol", () => {
+            Assert(ChartParser.IsIndexSymbol("sh000001"));
+            Assert(ChartParser.IsIndexSymbol("sh000300"));
+            Assert(ChartParser.IsIndexSymbol("sz399001"));
+            Assert(ChartParser.IsIndexSymbol("bj899050"));
+            Assert(!ChartParser.IsIndexSymbol("sh600519"));
+            Assert(!ChartParser.IsIndexSymbol("sz000001"));
+            Assert(!ChartParser.IsIndexSymbol("sz159915"));
+        });
+        fail += Run("ChartScale.NiceTicks", () => {
+            var t = ChartScale.NiceTicks(1400, 1450, 5);
+            Assert(t.Count >= 5);
+            Assert(t[0] == 1400 && t[1] == 1410);
+            Assert(t[t.Count - 1] == 1450);
+            var flat = ChartScale.NiceTicks(5, 5, 5);
+            Assert(flat.Count >= 2);
+            var idx = ChartScale.NiceTicks(3610.2, 3660.49, 5);
+            Assert(idx.Count >= 5 && idx[0] >= 3610.2 && idx[idx.Count - 1] <= 3660.49);
+        });
+        fail += Run("ChartScale.MovingAverage", () => {
+            var bars = new List<DailyBar>();
+            for (int i = 1; i <= 6; i++)
+                bars.Add(new DailyBar { Date = "2026-01-0" + i, Close = i });
+            var ma = ChartScale.MovingAverage(bars, 5);
+            Assert(ma.Length == 6);
+            Assert(double.IsNaN(ma[0]) && double.IsNaN(ma[3]));
+            Assert(Math.Abs(ma[4] - 3) < 1e-9);
+            Assert(Math.Abs(ma[5] - 4) < 1e-9);
+            var shortMa = ChartScale.MovingAverage(bars.GetRange(0, 2), 5);
+            Assert(double.IsNaN(shortMa[0]) && double.IsNaN(shortMa[1]));
+        });
+        fail += Run("ChartScale window and percent and date", () => {
+            Assert(ChartScale.VisibleStart(120, 55) == 65);
+            Assert(ChartScale.VisibleStart(10, 55) == 0);
+            Assert(ChartScale.VisibleStart(0, 55) == 0);
+            Assert(Math.Abs(ChartScale.PercentFromPrev(11, 10) - 10) < 1e-9);
+            Assert(Math.Abs(ChartScale.PercentFromPrev(9, 10) + 10) < 1e-9);
+            Assert(ChartScale.PercentFromPrev(9, 0) == 0);
+            Assert(ChartScale.FormatShortDate("2026-11-09") == "11-09");
+        });
+        fail += Run("ChartScale week and month dates", () => {
+            Assert(ChartScale.FormatWeek("2026-11-06") == "26-11-06");
+            Assert(ChartScale.FormatMonth("2026-10-30") == "2026-10");
+            Assert(ChartScale.FormatWeek("") == "");
+            Assert(ChartScale.FormatMonth("2026-10") == "2026-10");
+        });
+        fail += Run("ChartScale.IntradayMa dynamic", () => {
+            var bars = new List<DailyBar>();
+            bars.Add(new DailyBar { Date = "2026-11-03", Close = 10 });
+            bars.Add(new DailyBar { Date = "2026-11-04", Close = 11 });
+            bars.Add(new DailyBar { Date = "2026-11-05", Close = 12 });
+            bars.Add(new DailyBar { Date = "2026-11-06", Close = 13 });
+            bars.Add(new DailyBar { Date = "2026-11-09", Close = 14 });
+            bars.Add(new DailyBar { Date = "2026-11-10", Close = 15 });
+            double ma3 = ChartScale.IntradayMa(bars, "20261110", 16, 3);
+            Assert(Math.Abs(ma3 - 43.0 / 3.0) < 1e-9);
+            double ma5 = ChartScale.IntradayMa(bars, "20261110", 16, 5);
+            Assert(Math.Abs(ma5 - 13.2) < 1e-9);
+            Assert(double.IsNaN(ChartScale.IntradayMa(bars, "20261110", 16, 10)));
+            double next = ChartScale.IntradayMa(bars, "20261111", 16, 3);
+            Assert(Math.Abs(next - 15.0) < 1e-9);
+            Assert(double.IsNaN(ChartScale.IntradayMa(bars, "20261110", 0, 3)));
+            Assert(double.IsNaN(ChartScale.IntradayMa(null, "20261110", 16, 3)));
+        });
+        fail += Run("ChartScale.MaxVolume visible window", () => {
+            var bars = new List<DailyBar>();
+            bars.Add(new DailyBar { Volume = 100 });
+            bars.Add(new DailyBar { Volume = 300 });
+            bars.Add(new DailyBar { Volume = 200 });
+            Assert(Math.Abs(ChartScale.MaxVolume(bars, 0) - 300) < 1e-9);
+            Assert(Math.Abs(ChartScale.MaxVolume(bars, 1) - 300) < 1e-9);
+            Assert(Math.Abs(ChartScale.MaxVolume(bars, 2) - 200) < 1e-9);
+            Assert(ChartScale.MaxVolume(bars, 3) == 0);
+            Assert(ChartScale.MaxVolume(null, 0) == 0);
+            Assert(ChartScale.MaxVolume(new List<DailyBar>(), 0) == 0);
+        });
+        fail += Run("ChartScale.FormatVolume units", () => {
+            Assert(ChartScale.FormatVolume(0) == "0");
+            Assert(ChartScale.FormatVolume(9999) == "9999");
+            Assert(ChartScale.FormatVolume(10000) == "1.0万");
+            Assert(ChartScale.FormatVolume(1234567) == "123.5万");
+            Assert(ChartScale.FormatVolume(10000000) == "1000万");
+            Assert(ChartScale.FormatVolume(123456789) == "1.23亿");
+            Assert(ChartScale.FormatVolume(double.NaN) == "0");
+        });
+        fail += Run("ChartScale.MinuteVolumes cumulative diff", () => {
+            var points = new List<MinutePoint>();
+            points.Add(new MinutePoint { Time = "0930", MinuteIndex = 0, Price = 10.0, CumVolume = 100 });
+            points.Add(new MinutePoint { Time = "0931", MinuteIndex = 1, Price = 10.1, CumVolume = 350 });
+            points.Add(new MinutePoint { Time = "0932", MinuteIndex = 2, Price = 10.0, CumVolume = 300 });
+            points.Add(new MinutePoint { Time = "1130", MinuteIndex = 120, Price = 10.2, CumVolume = 1000 });
+            points.Add(new MinutePoint { Time = "1300", MinuteIndex = 120, Price = 10.3, CumVolume = 1600 });
+            var v = ChartScale.MinuteVolumes(points);
+            Assert(v.Length == 241);
+            Assert(Math.Abs(v[0] - 100) < 1e-9);
+            Assert(Math.Abs(v[1] - 250) < 1e-9);
+            Assert(Math.Abs(v[2]) < 1e-9);
+            Assert(Math.Abs(v[120] - 1250) < 1e-9);
+            Assert(Math.Abs(v[3]) < 1e-9);
+            var empty = ChartScale.MinuteVolumes(null);
+            Assert(empty.Length == 241 && empty[0] == 0);
+        });
+        fail += Run("ChartScale limit ratio by board", () => {
+            Assert(Math.Abs(ChartScale.LimitRatio("sh600519", "\u8d35\u5dde\u8305\u53f0") - 0.10) < 1e-9);
+            Assert(Math.Abs(ChartScale.LimitRatio("sz000001", "\u5e73\u5b89\u94f6\u884c") - 0.10) < 1e-9);
+            Assert(Math.Abs(ChartScale.LimitRatio("sz300750", "\u5b81\u5fb7\u65f6\u4ee3") - 0.20) < 1e-9);
+            Assert(Math.Abs(ChartScale.LimitRatio("sh688981", "\u4e2d\u82af\u56fd\u9645") - 0.20) < 1e-9);
+            Assert(Math.Abs(ChartScale.LimitRatio("bj430047", "\u8bfa\u601d\u5170\u5fb7") - 0.30) < 1e-9);
+            Assert(Math.Abs(ChartScale.LimitRatio("sh900901", "\u4e91\u8d5bB\u80a1") - 0.10) < 1e-9);
+            Assert(Math.Abs(ChartScale.LimitRatio("sh600519", "*ST\u67d0\u67d0") - 0.05) < 1e-9);
+            Assert(ChartScale.LimitRatio("sh000001", "\u4e0a\u8bc1\u6307\u6570") == 0);
+            Assert(ChartScale.LimitRatio("sz399001", "\u6df1\u8bc1\u6210\u6307") == 0);
+            Assert(ChartScale.LimitRatio("sh510300", "\u6caa\u6df1300ETF") == 0);
+            Assert(ChartScale.LimitRatio("sz159915", "\u521b\u4e1a\u677fETF") == 0);
+        });
+        fail += Run("ChartScale limit up detection", () => {
+            var prev = new DailyBar { Date = "2026-11-06", Open = 9.5, Close = 10, High = 10.1, Low = 9.4, Volume = 1 };
+            var bar = new DailyBar { Date = "2026-11-09", Open = 10.2, Close = 11, High = 11, Low = 10.1, Volume = 1 };
+            Assert(ChartScale.IsLimitUp(bar, prev, 0.10));
+            Assert(!ChartScale.IsLimitUp(bar, prev, 0.20));
+            Assert(ChartScale.IsLimitUp(new DailyBar { Open = 11, Close = 11, High = 11, Low = 11 }, prev, 0.10));
+            Assert(ChartScale.IsLimitUp(new DailyBar { Open = 10.2, Close = 10.99, High = 10.99, Low = 10 }, prev, 0.10));
+            Assert(!ChartScale.IsLimitUp(new DailyBar { Open = 10.2, Close = 10.95, High = 10.95, Low = 10 }, prev, 0.10));
+            Assert(!ChartScale.IsLimitUp(new DailyBar { Open = 10.2, Close = 10.99, High = 11.00, Low = 10 }, prev, 0.10));
+            Assert(!ChartScale.IsLimitUp(bar, null, 0.10));
+            Assert(!ChartScale.IsLimitUp(bar, prev, 0));
+            Assert(!ChartScale.IsLimitUp(new DailyBar { Open = 10, Close = 10.5, High = 10.5, Low = 10 },
+                new DailyBar { Open = 10, Close = 0, High = 10, Low = 10 }, 0.05));
+            Assert(ChartScale.IsLimitUp(new DailyBar { Open = 10, Close = 12, High = 12, Low = 10 }, prev, 0.20));
+            Assert(ChartScale.IsLimitUp(new DailyBar { Open = 10, Close = 13, High = 13, Low = 10 }, prev, 0.30));
+            Assert(ChartScale.IsLimitUp(new DailyBar { Open = 10, Close = 10.5, High = 10.5, Low = 10 }, prev, 0.05));
         });
         Console.WriteLine(fail == 0 ? "ALL PASS" : fail + " FAILED");
         return fail == 0 ? 0 : 1;

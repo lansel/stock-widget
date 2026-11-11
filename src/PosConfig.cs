@@ -14,6 +14,16 @@ public static class PosConfig
         }
     }
 
+    public static string ChartPath
+    {
+        get
+        {
+            return Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "StockWidget", "chart.ini");
+        }
+    }
+
     public static Point Load(string path)
     {
         try

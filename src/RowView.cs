@@ -25,6 +25,7 @@ public sealed class RowView : IDisposable
     private Label _statusDot;
     private List<string> _codes = new List<string>();
     private List<string> _aliases = new List<string>();
+    public Action<string, string> NameDoubleClicked;
     private Color _nameColor = Color.WhiteSmoke;
     private bool _showPrice;
     private bool _marketClosed;
@@ -146,8 +147,10 @@ public sealed class RowView : IDisposable
     // 有别名时 tooltip 带出代码和服务器名称，信息不丢
     private string ToolTipText(int i, string serverName)
     {
-        if (i >= _aliases.Count || _aliases[i].Length == 0) return serverName;
-        return _aliases[i] + " (" + _codes[i] + " " + serverName + ")";
+        string text = serverName;
+        if (i < _aliases.Count && _aliases[i].Length > 0)
+            text = _aliases[i] + " (" + _codes[i] + " " + serverName + ")";
+        return text + "\n双击查看图表";
     }
 
     public void SetStale(bool stale)
@@ -214,6 +217,12 @@ public sealed class RowView : IDisposable
         name.TextAlign = ContentAlignment.MiddleLeft;
         name.Size = new Size(_metrics.NameColumnWidth, _metrics.RowHeight);
         name.Text = alias.Length > 0 ? alias : code;
+        string rowCode = code;
+        string rowAlias = alias;
+        name.DoubleClick += delegate
+        {
+            if (NameDoubleClicked != null) NameDoubleClicked(rowCode, rowAlias);
+        };
         _configure(name);
         _parent.Controls.Add(name);
         _nameLabels.Add(name);

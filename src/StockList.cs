@@ -13,6 +13,7 @@ public class WidgetSettings
     public bool HideOnWinD = false;
     public bool Autostart = true;
     public bool ShowPrice = false;
+    public bool PauseWhenAway = true;
     public double Opacity = 0.92;
     public Color BgColor = Color.FromArgb(32, 32, 36);
     public Color NameColor = Color.WhiteSmoke;
@@ -64,6 +65,11 @@ public static class StockList
                 if (key.Equals("showPrice", StringComparison.OrdinalIgnoreCase))
                 {
                     s.ShowPrice = val.Equals("true", StringComparison.OrdinalIgnoreCase);
+                    continue;
+                }
+                if (key.Equals("pauseWhenAway", StringComparison.OrdinalIgnoreCase))
+                {
+                    s.PauseWhenAway = !val.Equals("false", StringComparison.OrdinalIgnoreCase);
                     continue;
                 }
                 if (key.Equals("bgColor", StringComparison.OrdinalIgnoreCase))

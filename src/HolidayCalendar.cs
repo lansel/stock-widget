@@ -4,6 +4,7 @@ public static class HolidayCalendar
 {
     // A 股 2026 年非周末休市日，来源：上交所《关于2026年部分节假日休市安排的通知》
     // https://www.sse.com.cn/disclosure/announcement/general/c/c_20251222_10802507.shtml
+    // 2027 年非周末休市日，按公开的 2027 年放假安排整理；上交所年度休市公告发布后核对
     // 新年度安排公布后随版本更新；未覆盖年份退回周末/时段判断，行为与旧版一致
     private static readonly string[] Closed2026 =
     {
@@ -17,10 +18,22 @@ public static class HolidayCalendar
         "20261001", "20261002", "20261005", "20261006", "20261007",  // 国庆节
     };
 
+    private static readonly string[] Closed2027 =
+    {
+        "20270101",                                                  // 元旦
+        "20270205", "20270208", "20270209", "20270210", "20270211",  // 春节
+        "20270212",
+        "20270405",                                                  // 清明节
+        "20270430", "20270503", "20270504",                          // 劳动节
+        "20270609",                                                  // 端午节
+        "20270915",                                                  // 中秋节
+        "20271001", "20271004", "20271005", "20271006", "20271007",  // 国庆节
+    };
+
     public static bool IsClosed(DateTime date)
     {
-        if (date.Year != 2026) return false;
+        if (date.Year != 2026 && date.Year != 2027) return false;
         string key = date.ToString("yyyyMMdd", System.Globalization.CultureInfo.InvariantCulture);
-        return Array.IndexOf(Closed2026, key) >= 0;
+        return Array.IndexOf(date.Year == 2026 ? Closed2026 : Closed2027, key) >= 0;
     }
 }

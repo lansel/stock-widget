@@ -77,14 +77,18 @@ public sealed class WidgetForm : Form
     private bool _winKeyDown;
     private bool _winDToggle;
     private bool _hideOnWinD;
+    private bool _pauseWhenAway = true;
     private bool _lastAutostart = true;
     private bool _lastDesktopShown;
     private IntPtr _lastAppFg = IntPtr.Zero;
+    private Color _nameColor = Color.WhiteSmoke;
+    private ChartForm _chart;
 
     private List<string> _codes = new List<string>();
     private Dictionary<string, Quote> _quotes = new Dictionary<string, Quote>();
     private bool _fetchBusy;
     private bool _stale;
+    private bool _quotePolling;
     private Timer _quoteTimer;
     private Point _dragStartScreen;
     private Point _formStart;
@@ -111,6 +115,7 @@ public sealed class WidgetForm : Form
         ContextMenuStrip = _menu;
 
         _rows = new RowView(this, _metrics, ConfigureRowTarget);
+        _rows.NameDoubleClicked = OpenChart;
 
         MouseDown += OnDragMouseDown;
         MouseMove += OnDragMouseMove;
@@ -130,7 +135,6 @@ public sealed class WidgetForm : Form
         ApplySnapshot(_config.Poll(DateTime.UtcNow), true);
         ApplySavedPosition();
         UpdateKeyboardHook();
-        StartQuoteTimer(TradingClock.GetIntervalMs(TradingClock.GetStatus(DateTime.Now)));
         _rows.SetMarketClosed(TradingClock.IsNonTradingDay(DateTime.Now));
         Shown += OnFormShown;
         ApplyRoundedRegion();
@@ -182,9 +186,13 @@ public sealed class WidgetForm : Form
 
         bool oldHide = _hideOnWinD;
         _hideOnWinD = settings.HideOnWinD;
+        _pauseWhenAway = settings.PauseWhenAway;
         Opacity = settings.Opacity;
         BackColor = settings.BgColor;
+        _nameColor = settings.NameColor;
         _rows.SetNameColor(settings.NameColor);
+        if (_chart != null && !_chart.IsDisposed)
+            _chart.ApplyTheme(settings.BgColor, settings.NameColor);
 
         bool rebuilt = _rows.SetCodes(settings.Codes, settings.Aliases, settings.ShowPrice, snapshot.Exists);
         if (rebuilt)
@@ -248,20 +256,18 @@ public sealed class WidgetForm : Form
     {
         if (Visible) return;
         Show();
-        _quoteTimer.Start();
-        FetchOnce();
     }
 
     private void HideWidget()
     {
         if (!Visible) return;
         Hide();
-        _quoteTimer.Stop();
     }
 
     private void OnFormShown(object sender, EventArgs e)
     {
-        FetchOnce();
+        IntPtr fg = GetForegroundWindow();
+        UpdateQuotePolling(GetForegroundKind(fg), fg != IntPtr.Zero);
     }
 
     private void ConfigureRowTarget(Control c)
@@ -351,6 +357,26 @@ public sealed class WidgetForm : Form
                     SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
                 break;
         }
+
+        UpdateQuotePolling(kind, fg != IntPtr.Zero);
+    }
+
+    private void UpdateQuotePolling(ForegroundKind foreground, bool hasForeground)
+    {
+        bool should = PollPolicy.ShouldPoll(
+            Visible, _pauseWhenAway, _hideOnWinD, hasForeground, foreground, IdleClock.GetIdleMs());
+        if (should == _quotePolling) return;
+
+        _quotePolling = should;
+        if (!should)
+        {
+            _quoteTimer.Stop();
+            return;
+        }
+
+        _rows.SetMarketClosed(TradingClock.IsNonTradingDay(DateTime.Now));
+        StartQuoteTimer(TradingClock.GetIntervalMs(TradingClock.GetStatus(DateTime.Now)));
+        FetchOnce();
     }
 
     private void StartQuoteTimer(int intervalMs)
@@ -366,7 +392,7 @@ public sealed class WidgetForm : Form
 
     private void OnQuoteTick(object sender, EventArgs e)
     {
-        if (!Visible) return;
+        if (!Visible || !_quotePolling) return;
 
         var status = TradingClock.GetStatus(DateTime.Now);
         int want = TradingClock.GetIntervalMs(status);
@@ -525,6 +551,31 @@ public sealed class WidgetForm : Form
         }
     }
 
+    private void OpenChart(string code, string alias)
+    {
+        string symbol = StockList.ToSymbol(code);
+        if (symbol.Length == 0) return;
+
+        if (_chart == null || _chart.IsDisposed)
+        {
+            ChartForm form = new ChartForm(_metrics, Bounds);
+            _chart = form;
+            form.FormClosed += delegate
+            {
+                if (_chart == form) _chart = null;
+            };
+            form.ApplyTheme(BackColor, _nameColor);
+            form.SetTarget(code, alias, symbol);
+            form.Show();
+        }
+        else
+        {
+            _chart.SetTarget(code, alias, symbol);
+            if (!_chart.Visible) _chart.Show();
+            _chart.Activate();
+        }
+    }
+
     private void OnExitClick(object sender, EventArgs e)
     {
         Close();
@@ -532,6 +583,11 @@ public sealed class WidgetForm : Form
 
     private void OnFormClosing(object sender, FormClosingEventArgs e)
     {
+        try
+        {
+            if (_chart != null && !_chart.IsDisposed) _chart.Close();
+        }
+        catch { }
         try
         {
             Rectangle area = GetCurrentScreenArea();

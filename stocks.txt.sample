@@ -17,6 +17,9 @@ autostart=true
 # 现价列（默认 false；true = 名称和涨跌幅之间显示现价）
 showPrice=false
 
+# 离开桌面/锁屏/空闲时暂停行情请求（默认 true）；false = 旧行为，挂件可见就持续刷新
+pauseWhenAway=true
+
 # 透明度 0.1~1.0（默认 0.92）
 opacity=0.92
 

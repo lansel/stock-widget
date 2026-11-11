@@ -3,7 +3,7 @@ $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 New-Item -ItemType Directory -Force -Path bin | Out-Null
 
 $selftestSrc = @("selftest\SelfTest.cs")
-foreach ($f in @("QuoteParser.cs","StockList.cs","TradingClock.cs","HolidayCalendar.cs","QuoteClient.cs","PosConfig.cs","ConfigWatcher.cs","DesktopShowState.cs")) {
+foreach ($f in @("QuoteParser.cs","StockList.cs","TradingClock.cs","HolidayCalendar.cs","QuoteClient.cs","PosConfig.cs","ConfigWatcher.cs","DesktopShowState.cs","PollPolicy.cs","ChartParser.cs","ChartScale.cs","ChartClient.cs")) {
   $p = "src\$f"
   if (Test-Path $p) { $selftestSrc += $p }
 }
