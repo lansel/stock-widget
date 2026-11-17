@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
-**Goal:** 双击挂件中的股票名称，打开独立窗口查看当日分时（价格线 + 成交均价线）和日 K（蜡烛 + MA5/10/20）。
+**Goal:** 双击挂件中的股票名称，打开独立窗口查看当日分时（价格线 + 成交均价线）和日 K（蜡烛 + MA5/10/20/30）。
 
 **Architecture:** 新增纯逻辑层（`ChartParser` 解析腾讯接口、`ChartScale` 刻度/均线/映射）、取数层（`ChartClient`）、自绘层（`ChartCanvas` GDI+ 双缓冲）和窗口壳（`ChartForm`），由 `RowView` 的双击回调交给 `WidgetForm` 打开/复用窗口。
 
@@ -128,11 +128,11 @@ x = `MinuteIndex/240`；y 范围含昨收、价格、均价（仅 HasAvg），�
 
 - [x] **Step 3: 日 K 绘制**
 
-可见根数 = `max(10, plotWidth / (9×scale))`，取最后 N 根；y 范围含可见高低点和均线；红涨绿跌实体 + 影线；涨停柱改高亮样式（金色实心柱 + 亮金描边 + 顶部白色三角）；MA5 白 / MA10 黄 / MA20 紫，图例左上；横轴约 5 个 MM-DD 日期。
+可见根数 = `max(10, plotWidth / (9×scale))`，取最后 N 根；y 范围含可见高低点和均线；红涨绿跌实体 + 影线；涨停柱改高亮样式（金色实心柱 + 亮金描边 + 顶部白色三角）；MA5 白 / MA10 黄 / MA20 紫 / MA30 蓝，图例左上并显示最新一根均线数值；横轴约 5 个 MM-DD 日期。
 
 - [x] **Step 4: 十字光标**
 
-鼠标移动时吸附最近分钟点/蜡烛，画竖线/横线 + 读数框：分时时间/价格/均价/涨跌幅；日K 日期/开高低收/涨跌幅/MA，涨停附“涨停”。读数框避让绘图区边界；MouseLeave 清除。
+鼠标移动时吸附最近分钟点/蜡烛，画竖线/横线 + 读数框：分时时间/价格/均价/涨跌幅；日K 日期/开高低收/涨跌幅/MA5/10/20/30，涨停附“涨停”。读数框避让绘图区边界；MouseLeave 清除。
 
 - [x] **Step 5: 构建通过**
 

@@ -26,6 +26,7 @@ public sealed class ChartCanvas : Control
     private static readonly Color ColorMa5 = Color.FromArgb(235, 235, 240);
     private static readonly Color ColorMa10 = Color.FromArgb(232, 193, 90);
     private static readonly Color ColorMa20 = Color.FromArgb(200, 130, 230);
+    private static readonly Color ColorMa30 = Color.FromArgb(100, 190, 255);
     private static readonly Color ColorCross = Color.FromArgb(130, 130, 140);
     private static readonly Color ColorLimitUp = Color.FromArgb(255, 196, 58);
     private static readonly Color ColorLimitMarker = Color.White;
@@ -482,6 +483,7 @@ public sealed class ChartCanvas : Control
         double[] ma5 = ChartScale.MovingAverage(s.Bars, 5);
         double[] ma10 = ChartScale.MovingAverage(s.Bars, 10);
         double[] ma20 = ChartScale.MovingAverage(s.Bars, 20);
+        double[] ma30 = ChartScale.MovingAverage(s.Bars, 30);
         double maxVolume = ChartScale.MaxVolume(s.Bars, start);
 
         double min = double.MaxValue;
@@ -494,6 +496,7 @@ public sealed class ChartCanvas : Control
             IncludeMa(ma5, i, ref min, ref max);
             IncludeMa(ma10, i, ref min, ref max);
             IncludeMa(ma20, i, ref min, ref max);
+            IncludeMa(ma30, i, ref min, ref max);
         }
         if (min > max) { min = 0; max = 1; }
         double pad = (max - min) * 0.06;
@@ -578,6 +581,7 @@ public sealed class ChartCanvas : Control
         DrawMa(g, s, ma5, start, visible, pricePlot, min, max, ColorMa5);
         DrawMa(g, s, ma10, start, visible, pricePlot, min, max, ColorMa10);
         DrawMa(g, s, ma20, start, visible, pricePlot, min, max, ColorMa20);
+        DrawMa(g, s, ma30, start, visible, pricePlot, min, max, ColorMa30);
 
         using (var marker = new SolidBrush(ColorLimitMarker))
         {
@@ -596,26 +600,46 @@ public sealed class ChartCanvas : Control
             }
         }
 
-        using (var brush5 = new SolidBrush(ColorMa5))
-        using (var brush10 = new SolidBrush(ColorMa10))
-        using (var brush20 = new SolidBrush(ColorMa20))
-        {
-            float x = pricePlot.Left + 6 * _scale;
-            float y = pricePlot.Top + 2 * _scale;
-            g.DrawString("MA5", _legendFont, brush5, x, y);
-            x += g.MeasureString("MA5 ", _legendFont).Width;
-            g.DrawString("MA10", _legendFont, brush10, x, y);
-            x += g.MeasureString("MA10 ", _legendFont).Width;
-            g.DrawString("MA20", _legendFont, brush20, x, y);
-        }
+        DrawDailyMaLegend(g, pricePlot, s.Bars.Count - 1, ma5, ma10, ma20, ma30);
 
         if (_mouseIn && plot.Contains(_mouse))
-            PaintDailyCrosshair(g, s, ma5, ma10, ma20, plot, pricePlot, volumePlot,
+            PaintDailyCrosshair(g, s, ma5, ma10, ma20, ma30, plot, pricePlot, volumePlot,
                 start, visible, min, max, maxVolume, limitRatio);
     }
 
+    private void DrawDailyMaLegend(Graphics g, Rectangle pricePlot, int idx,
+        double[] ma5, double[] ma10, double[] ma20, double[] ma30)
+    {
+        string[] labels = { "MA5", "MA10", "MA20", "MA30" };
+        double[] values = { ma5[idx], ma10[idx], ma20[idx], ma30[idx] };
+        Color[] colors = { ColorMa5, ColorMa10, ColorMa20, ColorMa30 };
+        string[] parts = new string[labels.Length];
+        float[] widths = new float[labels.Length];
+        float total = 0;
+        for (int i = 0; i < labels.Length; i++)
+        {
+            string valueText = double.IsNaN(values[i]) ? "--" : FormatPrice(values[i]);
+            parts[i] = labels[i] + " " + valueText;
+            widths[i] = g.MeasureString(parts[i], _legendFont).Width;
+            total += widths[i];
+            if (i < labels.Length - 1) total += 8 * _scale;
+        }
+
+        float x = pricePlot.Left + 6 * _scale;
+        float y = pricePlot.Top + 2 * _scale;
+        float height = _legendFont.GetHeight(g) + 2 * _scale;
+        using (var bg = new SolidBrush(Color.FromArgb(220, Shade(_bg, 1.2f))))
+            g.FillRectangle(bg, x - 4 * _scale, y - 1 * _scale, total + 8 * _scale, height);
+        for (int i = 0; i < labels.Length; i++)
+        {
+            using (var brush = new SolidBrush(colors[i]))
+                g.DrawString(parts[i], _legendFont, brush, x, y);
+            x += widths[i] + 8 * _scale;
+        }
+    }
+
     private void PaintDailyCrosshair(Graphics g, DailySeries s, double[] ma5, double[] ma10,
-        double[] ma20, Rectangle plot, Rectangle pricePlot, Rectangle volumePlot,
+        double[] ma20, double[] ma30, Rectangle plot, Rectangle pricePlot, Rectangle volumePlot,
         int start, int visible, double min, double max, double maxVolume, double limitRatio)
     {
         int idx = start + (int)Math.Floor((_mouse.X - plot.Left) / (float)plot.Width * visible);
@@ -647,6 +671,7 @@ public sealed class ChartCanvas : Control
         if (!double.IsNaN(ma5[idx])) lines.Add("MA5 " + FormatPrice(ma5[idx]));
         if (!double.IsNaN(ma10[idx])) lines.Add("MA10 " + FormatPrice(ma10[idx]));
         if (!double.IsNaN(ma20[idx])) lines.Add("MA20 " + FormatPrice(ma20[idx]));
+        if (!double.IsNaN(ma30[idx])) lines.Add("MA30 " + FormatPrice(ma30[idx]));
         DrawReadout(g, lines, plot, new PointF(x, y));
     }
 
