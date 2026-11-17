@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Drawing;
 using System.IO;
 using System.Runtime.InteropServices;
@@ -71,7 +72,10 @@ public sealed class WidgetForm : Form
     private readonly UiMetrics _metrics;
     private readonly RowView _rows;
     private readonly ContextMenuStrip _menu;
+    private readonly ToolStripMenuItem _removeItem;
+    private readonly ToolStripSeparator _removeSeparator;
     private readonly ConfigWatcher _config;
+    private string _contextCode;
     private LowLevelKeyboardProc _keyboardProc;
     private IntPtr _hookId = IntPtr.Zero;
     private bool _winKeyDown;
@@ -83,6 +87,7 @@ public sealed class WidgetForm : Form
     private IntPtr _lastAppFg = IntPtr.Zero;
     private Color _nameColor = Color.WhiteSmoke;
     private ChartForm _chart;
+    private SearchForm _search;
 
     private List<string> _codes = new List<string>();
     private Dictionary<string, Quote> _quotes = new Dictionary<string, Quote>();
@@ -109,15 +114,26 @@ public sealed class WidgetForm : Form
         Size = new Size(_metrics.Width, _metrics.MinHeight);
 
         _menu = new ContextMenuStrip();
+        _removeItem = new ToolStripMenuItem("移出列表");
+        _removeItem.Click += OnRemoveClick;
+        _removeSeparator = new ToolStripSeparator();
+        _menu.Items.Add(_removeItem);
+        _menu.Items.Add(_removeSeparator);
+        var searchItem = new ToolStripMenuItem("搜索股票…");
+        searchItem.Click += OnSearchClick;
+        _menu.Items.Add(searchItem);
+        _menu.Items.Add(new ToolStripSeparator());
         var exitItem = new ToolStripMenuItem("退出");
         exitItem.Click += OnExitClick;
         _menu.Items.Add(exitItem);
+        _menu.Opening += OnMenuOpening;
         ContextMenuStrip = _menu;
 
         _rows = new RowView(this, _metrics, ConfigureRowTarget);
         _rows.NameDoubleClicked = OpenChart;
 
         MouseDown += OnDragMouseDown;
+        MouseDown += OnContextMouseDown;
         MouseMove += OnDragMouseMove;
         MouseUp += OnDragMouseUp;
         Resize += OnFormResize;
@@ -193,6 +209,8 @@ public sealed class WidgetForm : Form
         _rows.SetNameColor(settings.NameColor);
         if (_chart != null && !_chart.IsDisposed)
             _chart.ApplyTheme(settings.BgColor, settings.NameColor);
+        if (_search != null && !_search.IsDisposed)
+            _search.ApplyTheme(settings.BgColor, settings.NameColor);
 
         bool rebuilt = _rows.SetCodes(settings.Codes, settings.Aliases, settings.ShowPrice, snapshot.Exists);
         if (rebuilt)
@@ -273,6 +291,7 @@ public sealed class WidgetForm : Form
     private void ConfigureRowTarget(Control c)
     {
         c.MouseDown += OnDragMouseDown;
+        c.MouseDown += OnContextMouseDown;
         c.MouseMove += OnDragMouseMove;
         c.MouseUp += OnDragMouseUp;
         c.ContextMenuStrip = _menu;
@@ -553,8 +572,12 @@ public sealed class WidgetForm : Form
 
     private void OpenChart(string code, string alias)
     {
-        string symbol = StockList.ToSymbol(code);
-        if (symbol.Length == 0) return;
+        OpenChartWithSymbol(code, alias, StockList.ToSymbol(code));
+    }
+
+    private void OpenChartWithSymbol(string code, string alias, string symbol)
+    {
+        if (string.IsNullOrEmpty(symbol)) return;
 
         if (_chart == null || _chart.IsDisposed)
         {
@@ -576,6 +599,63 @@ public sealed class WidgetForm : Form
         }
     }
 
+    private void OpenChartFromSearch(StockSearchResult result)
+    {
+        if (result == null) return;
+        OpenChartWithSymbol(result.Code, result.Name, result.Symbol);
+    }
+
+    private StockListAddResult AddToListToConfig(StockSearchResult result)
+    {
+        return StockListWriter.Add(_configPath, result);
+    }
+
+    private void OnContextMouseDown(object sender, MouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Right) return;
+        Control c = sender as Control;
+        _contextCode = c != null ? c.Tag as string : null;
+    }
+
+    private void OnMenuOpening(object sender, CancelEventArgs e)
+    {
+        bool row = !string.IsNullOrEmpty(_contextCode);
+        _removeItem.Visible = row;
+        _removeSeparator.Visible = row;
+    }
+
+    private void OnRemoveClick(object sender, EventArgs e)
+    {
+        string code = _contextCode;
+        _contextCode = null;
+        if (string.IsNullOrEmpty(code)) return;
+        string symbol = StockList.ToSymbol(code);
+        if (symbol.Length == 0) return;
+        StockListWriter.Remove(_configPath, symbol);
+    }
+
+    private void OnSearchClick(object sender, EventArgs e)
+    {
+        if (_search == null || _search.IsDisposed)
+        {
+            SearchForm form = new SearchForm(_metrics, Bounds, OpenChartFromSearch,
+                AddToListToConfig);
+            _search = form;
+            form.FormClosed += delegate
+            {
+                if (_search == form) _search = null;
+            };
+            form.ApplyTheme(BackColor, _nameColor);
+            form.Show();
+        }
+        else
+        {
+            if (!_search.Visible) _search.Show();
+            _search.Activate();
+            _search.FocusInput();
+        }
+    }
+
     private void OnExitClick(object sender, EventArgs e)
     {
         Close();
@@ -586,6 +666,11 @@ public sealed class WidgetForm : Form
         try
         {
             if (_chart != null && !_chart.IsDisposed) _chart.Close();
+        }
+        catch { }
+        try
+        {
+            if (_search != null && !_search.IsDisposed) _search.Close();
         }
         catch { }
         try

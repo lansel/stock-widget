@@ -299,6 +299,192 @@ static class SelfTest
             Assert(r.Count == 1);
             Assert(r["sh600519"].Pct == 1.11);
         });
+        fail += Run("StockSearchParser.Parse single result", () => {
+            var r = StockSearchParser.Parse(
+                "v_hint=\"sh~600519~\\u8d35\\u5dde\\u8305\\u53f0~gzmt~GP-A\";");
+            Assert(r.Count == 1);
+            Assert(r[0].Market == "sh" && r[0].Code == "600519");
+            Assert(r[0].Name == "\u8d35\u5dde\u8305\u53f0");
+            Assert(r[0].Type == "GP-A" && r[0].Symbol == "sh600519");
+        });
+        fail += Run("StockSearchParser.Parse multi filter markets", () => {
+            string text = "v_hint=\"sh~000001~\\u4e0a\\u8bc1\\u6307\\u6570~szzs~ZS"
+                + "^sz~000001~\\u5e73\\u5b89\\u94f6\\u884c~payh~GP-A"
+                + "^jj~000001~\\u534e\\u590f\\u6210\\u957f\\u6df7\\u5408~hxczhh~KJ"
+                + "^hk~00700~\\u817e\\u8baf\\u63a7\\u80a1~txkg~GP"
+                + "^us~000001~X~x~GP-A"
+                + "^us~tcehy.ps~TCEHY~GP\";";
+            var r = StockSearchParser.Parse(text);
+            Assert(r.Count == 2);
+            Assert(r[0].Market == "sh" && r[0].Name == "\u4e0a\u8bc1\u6307\u6570");
+            Assert(r[1].Market == "sz" && r[1].Name == "\u5e73\u5b89\u94f6\u884c");
+            Assert(r[0].Symbol == "sh000001" && r[1].Symbol == "sz000001");
+        });
+        fail += Run("StockSearchParser.Parse no match and garbage", () => {
+            Assert(StockSearchParser.Parse("v_hint=\"N\";").Count == 0);
+            Assert(StockSearchParser.Parse("v_hint=\"\";").Count == 0);
+            Assert(StockSearchParser.Parse("garbage").Count == 0);
+            Assert(StockSearchParser.Parse(null).Count == 0);
+            Assert(StockSearchParser.Parse("").Count == 0);
+        });
+        fail += Run("StockSearchParser.Parse whitelist and malformed", () => {
+            string text = "v_hint=\"sh~110059~x~x~KZZ"
+                + "^sz~123220~y~y~KZZ"
+                + "^sh~900901~\\u4e91\\u8d5bB\\u80a1~ysbg~GP-B"
+                + "^sz~161725~z~z~LOF"
+                + "^sh~600519~\\u8d35\\u5dde\\u8305\\u53f0~gzmt~GP-A"
+                + "^sz~abc~bad~x~GP-A"
+                + "^sz~12345~bad~x~GP-A"
+                + "^sh~600520~only\";";
+            var r = StockSearchParser.Parse(text);
+            Assert(r.Count == 3);
+            Assert(r[0].Type == "GP-B" && r[1].Type == "LOF" && r[2].Type == "GP-A");
+            Assert(r[2].Name == "\u8d35\u5dde\u8305\u53f0");
+        });
+        fail += Run("StockSearchParser.Parse caps at 10", () => {
+            var sb = new StringBuilder("v_hint=\"");
+            for (int i = 0; i < 12; i++) {
+                if (i > 0) sb.Append('^');
+                sb.Append("sh~6000" + i.ToString("00") + "~N" + i + "~x~GP-A");
+            }
+            sb.Append("\";");
+            var r = StockSearchParser.Parse(sb.ToString());
+            Assert(r.Count == 10);
+            Assert(r[9].Code == "600009");
+        });
+        fail += Run("StockSearchParser.Parse normalizes market case", () => {
+            var r = StockSearchParser.Parse("v_hint=\"SH~600519~X~x~gp-a\";");
+            Assert(r.Count == 1 && r[0].Market == "sh" && r[0].Type == "gp-a");
+            Assert(StockSearchParser.TypeLabel(r[0].Type) == "\u80a1\u7968");
+        });
+        fail += Run("StockSearchParser.TypeLabel", () => {
+            Assert(StockSearchParser.TypeLabel("GP-A") == "\u80a1\u7968");
+            Assert(StockSearchParser.TypeLabel("GP-B") == "B\u80a1");
+            Assert(StockSearchParser.TypeLabel("ZS") == "\u6307\u6570");
+            Assert(StockSearchParser.TypeLabel("ETF") == "ETF");
+            Assert(StockSearchParser.TypeLabel("LOF") == "LOF");
+            Assert(StockSearchParser.TypeLabel("KZZ") == "KZZ");
+        });
+        fail += Run("StockSearchClient.BuildUrl", () => {
+            Assert(StockSearchClient.BuildUrl("600519")
+                == "https://smartbox.gtimg.cn/s3/?v=2&q=600519&t=all");
+            Assert(StockSearchClient.BuildUrl("\u8d35\u5dde\u8305\u53f0")
+                == "https://smartbox.gtimg.cn/s3/?v=2&q=%E8%B4%B5%E5%B7%9E%E8%8C%85%E5%8F%B0&t=all");
+            Assert(StockSearchClient.BuildUrl("a&b") == "https://smartbox.gtimg.cn/s3/?v=2&q=a%26b&t=all");
+            Assert(StockSearchClient.BuildUrl("a b") == "https://smartbox.gtimg.cn/s3/?v=2&q=a%20b&t=all");
+        });
+        fail += Run("StockListWriter add to new file", () => {
+            string p = Path.Combine(Path.GetTempPath(), "sw_add_" + Guid.NewGuid().ToString("N") + ".txt");
+            try {
+                var r = new StockSearchResult { Market = "sh", Code = "600519", Name = "X", Type = "GP-A" };
+                Assert(StockListWriter.Add(p, r) == StockListAddResult.Added);
+                Assert(File.ReadAllText(p) == "600519" + Environment.NewLine);
+            } finally { if (File.Exists(p)) File.Delete(p); }
+        });
+        fail += Run("StockListWriter append preserves content", () => {
+            string p = Path.Combine(Path.GetTempPath(), "sw_add_" + Guid.NewGuid().ToString("N") + ".txt");
+            try {
+                File.WriteAllText(p, "# c\n600519 茅台\n000001\n");
+                var r = new StockSearchResult { Market = "sz", Code = "300750", Name = "X", Type = "GP-A" };
+                Assert(StockListWriter.Add(p, r) == StockListAddResult.Added);
+                var codes = StockList.ParseFileContent(File.ReadAllText(p));
+                Assert(codes.Count == 3 && codes[2] == "300750");
+            } finally { if (File.Exists(p)) File.Delete(p); }
+        });
+        fail += Run("StockListWriter file without trailing newline", () => {
+            string p = Path.Combine(Path.GetTempPath(), "sw_add_" + Guid.NewGuid().ToString("N") + ".txt");
+            try {
+                File.WriteAllText(p, "600519");
+                var r = new StockSearchResult { Market = "sz", Code = "000001", Name = "X", Type = "GP-A" };
+                Assert(StockListWriter.Add(p, r) == StockListAddResult.Added);
+                Assert(File.ReadAllText(p) == "600519" + Environment.NewLine + "000001" + Environment.NewLine);
+            } finally { if (File.Exists(p)) File.Delete(p); }
+        });
+        fail += Run("StockListWriter duplicate detection", () => {
+            string p = Path.Combine(Path.GetTempPath(), "sw_add_" + Guid.NewGuid().ToString("N") + ".txt");
+            try {
+                File.WriteAllText(p, "600519 茅台\nsh000001\n");
+                var stock = new StockSearchResult { Market = "sh", Code = "600519", Name = "X", Type = "GP-A" };
+                var index = new StockSearchResult { Market = "sh", Code = "000001", Name = "X", Type = "ZS" };
+                string before = File.ReadAllText(p);
+                Assert(StockListWriter.Add(p, stock) == StockListAddResult.AlreadyExists);
+                Assert(StockListWriter.Add(p, index) == StockListAddResult.AlreadyExists);
+                Assert(File.ReadAllText(p) == before);
+            } finally { if (File.Exists(p)) File.Delete(p); }
+        });
+        fail += Run("StockListWriter ambiguous index code", () => {
+            string p = Path.Combine(Path.GetTempPath(), "sw_add_" + Guid.NewGuid().ToString("N") + ".txt");
+            string p2 = Path.Combine(Path.GetTempPath(), "sw_add_" + Guid.NewGuid().ToString("N") + ".txt");
+            try {
+                var index = new StockSearchResult { Market = "sh", Code = "000001", Name = "X", Type = "ZS" };
+                var hs300 = new StockSearchResult { Market = "sh", Code = "000300", Name = "X", Type = "ZS" };
+                var stock = new StockSearchResult { Market = "sz", Code = "000001", Name = "X", Type = "GP-A" };
+                Assert(StockListWriter.Add(p, index) == StockListAddResult.Added);
+                Assert(StockListWriter.Add(p, hs300) == StockListAddResult.Added);
+                Assert(StockListWriter.Add(p, stock) == StockListAddResult.Added);
+                var lines = File.ReadAllText(p).Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                Assert(lines.Length == 3);
+                Assert(lines[0] == "sh000001" && lines[1] == "000300" && lines[2] == "000001");
+                File.WriteAllText(p2, "000001\n");
+                Assert(StockListWriter.Add(p2, index) == StockListAddResult.Added);
+                var lines2 = File.ReadAllText(p2).Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                Assert(lines2.Length == 2 && lines2[0] == "000001" && lines2[1] == "sh000001");
+            } finally { if (File.Exists(p)) File.Delete(p); if (File.Exists(p2)) File.Delete(p2); }
+        });
+        fail += Run("StockListWriter failure path", () => {
+            var r = new StockSearchResult { Market = "sh", Code = "600519", Name = "X", Type = "GP-A" };
+            Assert(StockListWriter.Add(Path.GetTempPath(), r) == StockListAddResult.Failed);
+        });
+        fail += Run("StockListWriter remove line preserves content", () => {
+            string p = Path.Combine(Path.GetTempPath(), "sw_add_" + Guid.NewGuid().ToString("N") + ".txt");
+            try {
+                File.WriteAllText(p, "# c\n600519 茅台\n000001\n");
+                Assert(StockListWriter.Remove(p, "sz000001") == StockListRemoveResult.Removed);
+                Assert(File.ReadAllText(p) == "# c\n600519 茅台\n");
+            } finally { if (File.Exists(p)) File.Delete(p); }
+        });
+        fail += Run("StockListWriter remove preserves BOM", () => {
+            string p = Path.Combine(Path.GetTempPath(), "sw_add_" + Guid.NewGuid().ToString("N") + ".txt");
+            try {
+                File.WriteAllText(p, "600519\n000001\n", new UTF8Encoding(true));
+                Assert(StockListWriter.Remove(p, "sh600519") == StockListRemoveResult.Removed);
+                byte[] bytes = File.ReadAllBytes(p);
+                Assert(bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF);
+                Assert(File.ReadAllText(p) == "000001\n");
+            } finally { if (File.Exists(p)) File.Delete(p); }
+        });
+        fail += Run("StockListWriter remove without trailing newline", () => {
+            string p = Path.Combine(Path.GetTempPath(), "sw_add_" + Guid.NewGuid().ToString("N") + ".txt");
+            try {
+                File.WriteAllText(p, "600519\r\n000001");
+                Assert(StockListWriter.Remove(p, "sz000001") == StockListRemoveResult.Removed);
+                Assert(File.ReadAllText(p) == "600519\r\n");
+            } finally { if (File.Exists(p)) File.Delete(p); }
+        });
+        fail += Run("StockListWriter remove not found", () => {
+            string p = Path.Combine(Path.GetTempPath(), "sw_add_" + Guid.NewGuid().ToString("N") + ".txt");
+            try {
+                File.WriteAllText(p, "600519\n");
+                string before = File.ReadAllText(p);
+                Assert(StockListWriter.Remove(p, "sh000300") == StockListRemoveResult.NotFound);
+                Assert(File.ReadAllText(p) == before);
+            } finally { if (File.Exists(p)) File.Delete(p); }
+        });
+        fail += Run("StockListWriter remove failure path", () => {
+            string p = Path.Combine(Path.GetTempPath(), "sw_add_" + Guid.NewGuid().ToString("N") + ".txt");
+            if (File.Exists(p)) File.Delete(p);
+            Assert(StockListWriter.Remove(p, "sh600519") == StockListRemoveResult.Failed);
+        });
+        fail += Run("StockListWriter remove index and stock by symbol", () => {
+            string p = Path.Combine(Path.GetTempPath(), "sw_add_" + Guid.NewGuid().ToString("N") + ".txt");
+            try {
+                File.WriteAllText(p, "sh000001\n000001\n");
+                Assert(StockListWriter.Remove(p, "sh000001") == StockListRemoveResult.Removed);
+                Assert(File.ReadAllText(p) == "000001\n");
+                Assert(StockListWriter.Remove(p, "sz000001") == StockListRemoveResult.Removed);
+                Assert(File.ReadAllText(p) == "");
+            } finally { if (File.Exists(p)) File.Delete(p); }
+        });
         fail += Run("StockList inline comments", () => {
             var s = StockList.ParseWidgetSettings(
                 "600519 # x\n000001#y\nhideOnWinD=true # z\nopacity=0.9 # dim\nbgColor=#202024\nnameColor=#F5F5F5 # 白色\nnameColor=#00FF00#紧贴\n");
@@ -509,6 +695,12 @@ static class SelfTest
             Assert(Math.Abs(ma[5] - 4) < 1e-9);
             var shortMa = ChartScale.MovingAverage(bars.GetRange(0, 2), 5);
             Assert(double.IsNaN(shortMa[0]) && double.IsNaN(shortMa[1]));
+            var bars30 = new List<DailyBar>();
+            for (int i = 1; i <= 30; i++)
+                bars30.Add(new DailyBar { Date = "2026-01", Close = i });
+            var ma30 = ChartScale.MovingAverage(bars30, 30);
+            Assert(double.IsNaN(ma30[28]));
+            Assert(Math.Abs(ma30[29] - 15.5) < 1e-9);
         });
         fail += Run("ChartScale window and percent and date", () => {
             Assert(ChartScale.VisibleStart(120, 55) == 65);

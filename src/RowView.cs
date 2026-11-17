@@ -217,6 +217,7 @@ public sealed class RowView : IDisposable
         name.TextAlign = ContentAlignment.MiddleLeft;
         name.Size = new Size(_metrics.NameColumnWidth, _metrics.RowHeight);
         name.Text = alias.Length > 0 ? alias : code;
+        name.Tag = code;
         string rowCode = code;
         string rowAlias = alias;
         name.DoubleClick += delegate
@@ -238,6 +239,7 @@ public sealed class RowView : IDisposable
             price.TextAlign = ContentAlignment.MiddleRight;
             price.Size = new Size(_metrics.PriceColumnWidth, _metrics.RowHeight);
             price.Text = "--";
+            price.Tag = code;
             _configure(price);
             _parent.Controls.Add(price);
             _priceLabels.Add(price);
@@ -251,6 +253,7 @@ public sealed class RowView : IDisposable
         pct.Size = new Size(_metrics.PctColumnWidth, _metrics.RowHeight);
         pct.Text = "--";
         pct.ForeColor = ColorFlat;
+        pct.Tag = code;
         _configure(pct);
         _parent.Controls.Add(pct);
         _pctLabels.Add(pct);

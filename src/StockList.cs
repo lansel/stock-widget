@@ -98,7 +98,7 @@ public static class StockList
         return s;
     }
 
-    private static bool IsCode(string code)
+    public static bool IsCode(string code)
     {
         return Regex.IsMatch(code, @"^\d{6}$") ||
             Regex.IsMatch(code, @"^(sh|sz|bj)\d{6}$", RegexOptions.IgnoreCase) ||
