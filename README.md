@@ -6,7 +6,7 @@ Windows 桌面常驻小挂件，实时显示 A 股/指数涨跌幅。零安装�
 
 ## 下载
 
-- Gitee：[Releases](https://gitee.com/Ricky_kyli/stock-widget/releases) 下载最新版 `StockWidget.exe` 和 `stocks.txt.sample`
+- Gitee：[仓库根目录](https://gitee.com/Ricky_kyli/stock-widget) 下载最新版 `StockWidget.exe` 和 `stocks.txt.sample`（Releases 保留历史版本）
 - GitHub：[Releases](https://github.com/lansel/stock-widget/releases)（由 CI 自动构建并挂载）
 
 ## 功能
